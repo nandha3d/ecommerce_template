@@ -78,42 +78,31 @@ supplement-ecommerce/
 ### Prerequisites
 - Node.js 18+ and npm
 - PHP 8.2+ and Composer
-- MySQL 8+ (or use Docker)
-- Docker & Docker Compose (optional)
+- MySQL 8+
+- Redis (optional, for caching)
 
-### Option 1: Docker Development (Recommended)
+### Backend Setup
 
-```bash
-# Clone and start all services
-cd supplement-ecommerce
-docker-compose up -d
-
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# phpMyAdmin: http://localhost:8080
-```
-
-### Option 2: Manual Setup
-
-#### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-# Access at http://localhost:5173
-```
-
-#### Backend
 ```bash
 cd backend
 composer install
 cp .env.example .env
 php artisan key:generate
 php artisan jwt:secret
+# Configure .env with your database credentials
 php artisan migrate --seed
 php artisan serve
-# API at http://localhost:8000
+# API will be available at http://localhost:8000
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+npm install
+# Ensure .env exists with VITE_API_URL=http://localhost:8000/api/v1
+npm run dev
+# Application will be available at http://localhost:5173
 ```
 
 ## 📡 API Endpoints
