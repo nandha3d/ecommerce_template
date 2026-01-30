@@ -1,0 +1,255 @@
+import React from 'react';
+import { Palette } from 'lucide-react';
+import AdminLayout from '../components/AdminLayout';
+import { Button, Card } from '../../../components/ui';
+import { useAdminTheme } from '../theme/AdminThemeProvider';
+import { useStoreLayoutSettings } from '../../../storeLayout/StoreLayoutProvider';
+import type { LayoutVariant } from '../../../storeLayout/storeLayoutSettings';
+
+const ColorField: React.FC<{
+    label: string;
+    value: string;
+    onChange: (next: string) => void;
+}> = ({ label, value, onChange }) => {
+    return (
+        <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+                <p className="font-medium text-neutral-900 truncate">{label}</p>
+                <p className="text-xs text-neutral-500 truncate">{value}</p>
+            </div>
+            <div className="flex items-center gap-3">
+                <input
+                    type="color"
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="h-9 w-12 rounded-lg border border-neutral-200 bg-white"
+                />
+                <input
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className="w-28 px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                />
+            </div>
+        </div>
+    );
+};
+
+const ThemeSettingsContent: React.FC = () => {
+    const {
+        presets,
+        preset,
+        state,
+        tokens,
+        layout,
+        setPresetId,
+        updateTokens,
+        updateLayout,
+        clearOverrides,
+        resetTheme,
+    } = useAdminTheme();
+
+    const { settings, setHome, setProductDetail, setCart, setCheckout, reset } = useStoreLayoutSettings();
+
+    const variantOptions: LayoutVariant[] = [1, 2, 3, 4, 5];
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-primary-900">Admin Appearance</h1>
+                    <p className="text-neutral-600">Change theme colors and layout dynamically (saved locally)</p>
+                </div>
+                <div className="flex gap-3">
+                    <Button variant="outline" onClick={clearOverrides}>Clear Overrides</Button>
+                    <Button variant="danger" onClick={resetTheme}>Reset</Button>
+                </div>
+            </div>
+
+            <Card className="p-0" hover={false}>
+                <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold text-neutral-900">Store Layout Variants</h2>
+                        <p className="text-sm text-neutral-500">Select which layout is used on the storefront pages</p>
+                    </div>
+                    <Button variant="outline" onClick={reset}>Reset Layouts</Button>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <p className="font-medium text-neutral-900">Home Page</p>
+                        <select
+                            value={settings.home}
+                            onChange={(e) => setHome(Number(e.target.value) as LayoutVariant)}
+                            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                        >
+                            {variantOptions.map(v => (
+                                <option key={v} value={v}>Layout {v}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="font-medium text-neutral-900">Product Detail Page</p>
+                        <select
+                            value={settings.productDetail}
+                            onChange={(e) => setProductDetail(Number(e.target.value) as LayoutVariant)}
+                            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                        >
+                            {variantOptions.map(v => (
+                                <option key={v} value={v}>Layout {v}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="font-medium text-neutral-900">Cart Page</p>
+                        <select
+                            value={settings.cart}
+                            onChange={(e) => setCart(Number(e.target.value) as LayoutVariant)}
+                            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                        >
+                            {variantOptions.map(v => (
+                                <option key={v} value={v}>Layout {v}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-2">
+                        <p className="font-medium text-neutral-900">Checkout Page</p>
+                        <select
+                            value={settings.checkout}
+                            onChange={(e) => setCheckout(Number(e.target.value) as LayoutVariant)}
+                            className="w-full px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                        >
+                            {variantOptions.map(v => (
+                                <option key={v} value={v}>Layout {v}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </Card>
+
+            <Card className="p-0" hover={false}>
+                <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Palette className="w-5 h-5 text-primary-500" />
+                        <h2 className="text-lg font-bold text-neutral-900">Theme Presets</h2>
+                    </div>
+                    <p className="text-sm text-neutral-500">Selected: <span className="font-medium text-neutral-700">{preset.name}</span></p>
+                </div>
+                <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {presets.map((p) => {
+                        const active = p.id === state.presetId;
+                        return (
+                            <button
+                                key={p.id}
+                                onClick={() => setPresetId(p.id)}
+                                className={`text-left rounded-xl border p-4 transition-all ${active ? 'border-primary-500 ring-2 ring-primary-100' : 'border-neutral-200 hover:border-neutral-300'
+                                    }`}
+                                style={{ background: 'var(--admin-surface)' }}
+                            >
+                                <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="font-semibold text-neutral-900 truncate">{p.name}</p>
+                                        <p className="text-xs text-neutral-500 truncate">{p.layout.nav} · {p.layout.density}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-4 h-4 rounded-full" style={{ background: p.tokens.primary }} />
+                                        <span className="w-4 h-4 rounded-full" style={{ background: p.tokens.sidebarBg }} />
+                                        <span className="w-4 h-4 rounded-full" style={{ background: p.tokens.bg }} />
+                                    </div>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+            </Card>
+
+            <div className="grid lg:grid-cols-2 gap-6">
+                <Card hover={false}>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-bold text-neutral-900">Color Overrides</h2>
+                        <p className="text-sm text-neutral-500">Overrides apply on top of the preset</p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <ColorField label="Background" value={tokens.bg} onChange={(v) => updateTokens({ bg: v })} />
+                        <ColorField label="Surface" value={tokens.surface} onChange={(v) => updateTokens({ surface: v })} />
+                        <ColorField label="Border" value={tokens.border} onChange={(v) => updateTokens({ border: v })} />
+                        <ColorField label="Text" value={tokens.text} onChange={(v) => updateTokens({ text: v })} />
+                        <ColorField label="Muted" value={tokens.muted} onChange={(v) => updateTokens({ muted: v })} />
+                        <div className="border-t border-neutral-100 pt-4" />
+                        <ColorField label="Primary" value={tokens.primary} onChange={(v) => updateTokens({ primary: v })} />
+                        <ColorField label="Primary Text" value={tokens.primaryText} onChange={(v) => updateTokens({ primaryText: v })} />
+                        <div className="border-t border-neutral-100 pt-4" />
+                        <ColorField label="Sidebar BG" value={tokens.sidebarBg} onChange={(v) => updateTokens({ sidebarBg: v })} />
+                        <ColorField label="Sidebar Text" value={tokens.sidebarText} onChange={(v) => updateTokens({ sidebarText: v })} />
+                        <ColorField label="Sidebar Active BG" value={tokens.sidebarActiveBg} onChange={(v) => updateTokens({ sidebarActiveBg: v })} />
+                        <ColorField label="Sidebar Active Text" value={tokens.sidebarActiveText} onChange={(v) => updateTokens({ sidebarActiveText: v })} />
+                    </div>
+                </Card>
+
+                <Card hover={false}>
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-bold text-neutral-900">Layout</h2>
+                        <p className="text-sm text-neutral-500">Change navigation placement & spacing</p>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <p className="font-medium text-neutral-900">Navigation</p>
+                                <p className="text-sm text-neutral-500">Sidebar or Topbar</p>
+                            </div>
+                            <select
+                                value={layout.nav}
+                                onChange={(e) => updateLayout({ nav: e.target.value as any })}
+                                className="px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                            >
+                                <option value="sidebar">Sidebar</option>
+                                <option value="topbar">Topbar</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <p className="font-medium text-neutral-900">Density</p>
+                                <p className="text-sm text-neutral-500">Comfortable or Compact</p>
+                            </div>
+                            <select
+                                value={layout.density}
+                                onChange={(e) => updateLayout({ density: e.target.value as any })}
+                                className="px-3 py-2 text-sm border border-neutral-200 rounded-lg bg-white"
+                            >
+                                <option value="comfortable">Comfortable</option>
+                                <option value="compact">Compact</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4">
+                            <div>
+                                <p className="font-medium text-neutral-900">Sidebar Width</p>
+                                <p className="text-sm text-neutral-500">{layout.sidebarWidth}px</p>
+                            </div>
+                            <input
+                                type="range"
+                                min={220}
+                                max={320}
+                                value={layout.sidebarWidth}
+                                onChange={(e) => updateLayout({ sidebarWidth: Number(e.target.value) })}
+                                className="w-40"
+                                disabled={layout.nav !== 'sidebar'}
+                            />
+                        </div>
+                    </div>
+                </Card>
+            </div>
+        </div>
+    );
+};
+
+const SettingsPage: React.FC = () => {
+    return (
+        <AdminLayout>
+            <ThemeSettingsContent />
+        </AdminLayout>
+    );
+};
+
+export default SettingsPage;
