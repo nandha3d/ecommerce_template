@@ -1,10 +1,12 @@
-import React from 'react';
-import { Palette } from 'lucide-react';
+import React, { useState } from 'react';
+import { Palette, Store, Loader2 } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import { Button, Card } from '../../../components/ui';
 import { useAdminTheme } from '../theme/AdminThemeProvider';
 import { useStoreLayoutSettings } from '../../../storeLayout/StoreLayoutProvider';
 import type { LayoutVariant } from '../../../storeLayout/storeLayoutSettings';
+import api from '../../../services/api';
+import toast from 'react-hot-toast';
 
 const ColorField: React.FC<{
     label: string;
@@ -50,18 +52,56 @@ const ThemeSettingsContent: React.FC = () => {
 
     const { settings, setHome, setProductDetail, setCart, setCheckout, reset } = useStoreLayoutSettings();
 
+    const [isSaving, setIsSaving] = useState(false);
+
     const variantOptions: LayoutVariant[] = [1, 2, 3, 4, 5];
+
+    /**
+     * Apply current admin theme to storefront (saves to database)
+     */
+    const applyToStore = async () => {
+        setIsSaving(true);
+        try {
+            await api.put('/admin/theme', {
+                preset_id: state.presetId,
+                primary: tokens.primary,
+                bg: tokens.bg,
+                surface: tokens.surface,
+                border: tokens.border,
+                text: tokens.text,
+                muted: tokens.muted,
+            });
+            toast.success('Theme applied to storefront!');
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || 'Failed to save theme');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <div className="space-y-6">
-            <div className="flex items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-primary-900">Admin Appearance</h1>
-                    <p className="text-neutral-600">Change theme colors and layout dynamically (saved locally)</p>
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl font-bold text-primary-900">Store Appearance</h1>
+                    <p className="text-neutral-600">Customize theme colors and apply to storefront.</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 flex-shrink-0">
                     <Button variant="outline" onClick={clearOverrides}>Clear Overrides</Button>
                     <Button variant="danger" onClick={resetTheme}>Reset</Button>
+                    <Button
+                        variant="primary"
+                        onClick={applyToStore}
+                        disabled={isSaving}
+                        className="flex items-center gap-2"
+                    >
+                        {isSaving ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Store className="w-4 h-4" />
+                        )}
+                        Apply to Store
+                    </Button>
                 </div>
             </div>
 
@@ -147,7 +187,6 @@ const ThemeSettingsContent: React.FC = () => {
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="font-semibold text-neutral-900 truncate">{p.name}</p>
-                                        <p className="text-xs text-neutral-500 truncate">{p.layout.nav} · {p.layout.density}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="w-4 h-4 rounded-full" style={{ background: p.tokens.primary }} />

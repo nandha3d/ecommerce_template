@@ -8,6 +8,7 @@ import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import { register as registerUser } from '../../store/slices/authSlice';
 import { Button, Input } from '../../components/ui';
 import toast from 'react-hot-toast';
+import { useConfig } from '../../core/config/ConfigContext';
 
 const registerSchema = z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -31,6 +32,7 @@ const RegisterPage: React.FC = () => {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { isLoading, error } = useAppSelector((state) => state.auth);
+    const { config } = useConfig();
 
     const {
         register,
@@ -72,7 +74,7 @@ const RegisterPage: React.FC = () => {
             <div className="hidden lg:flex flex-1 gradient-hero items-center justify-center p-12">
                 <div className="text-white text-center max-w-lg">
                     <h2 className="text-3xl font-display font-bold mb-6">
-                        Join the SupplePro Family
+                        Join the {config['site.name']} Family
                     </h2>
                     <p className="text-white/80 text-lg mb-8">
                         Create your account today and unlock exclusive benefits, personalized
@@ -102,9 +104,9 @@ const RegisterPage: React.FC = () => {
                     <div className="text-center mb-8">
                         <Link to="/" className="inline-flex items-center gap-2 mb-6">
                             <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-xl">S</span>
+                                <span className="text-white font-bold text-xl">{config['site.name'].charAt(0)}</span>
                             </div>
-                            <span className="text-xl font-display font-bold text-primary-900">SupplePro</span>
+                            <span className="text-xl font-display font-bold text-primary-900">{config['site.name']}</span>
                         </Link>
                         <h1 className="text-3xl font-display font-bold text-primary-900 mb-2">
                             Create Account
@@ -162,8 +164,8 @@ const RegisterPage: React.FC = () => {
                                             <div
                                                 key={level}
                                                 className={`h-1 flex-1 rounded ${passwordStrength >= level
-                                                        ? level <= 1 ? 'bg-danger' : level <= 2 ? 'bg-warning' : 'bg-success'
-                                                        : 'bg-neutral-200'
+                                                    ? level <= 1 ? 'bg-danger' : level <= 2 ? 'bg-warning' : 'bg-success'
+                                                    : 'bg-neutral-200'
                                                     }`}
                                             />
                                         ))}

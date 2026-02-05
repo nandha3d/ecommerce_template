@@ -11,9 +11,23 @@ use App\Http\Resources\OrderResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Core\Order\Actions\CreateOrderAction;
+use Core\Inventory\Services\InventoryService;
 
 class OrderController extends Controller
 {
+    private CreateOrderAction $createOrderAction;
+    private InventoryService $inventoryService;
+
+    public function __construct(
+        CreateOrderAction $createOrderAction,
+        InventoryService $inventoryService
+    )
+    {
+        $this->createOrderAction = $createOrderAction;
+        $this->inventoryService = $inventoryService;
+    }
+
     /**
      * List user's orders.
      */
@@ -102,76 +116,7 @@ class OrderController extends Controller
         DB::beginTransaction();
 
         try {
-            // Handle addresses
-            $billingAddressId = $request->input('billing_address_id');
-            $shippingAddressId = $request->input('shipping_address_id');
-
-            if ($request->has('billing_address')) {
-                $billingAddress = Address::create([
-                    'user_id' => $user->id,
-                    'type' => 'billing',
-                    ...$request->input('billing_address'),
-                ]);
-                $billingAddressId = $billingAddress->id;
-            }
-
-            if ($request->boolean('same_as_billing')) {
-                $shippingAddressId = $billingAddressId;
-            } elseif ($request->has('shipping_address')) {
-                $shippingAddress = Address::create([
-                    'user_id' => $user->id,
-                    'type' => 'shipping',
-                    ...$request->input('shipping_address'),
-                ]);
-                $shippingAddressId = $shippingAddress->id;
-            }
-
-            // Create order
-            $order = Order::create([
-                'user_id' => $user->id,
-                'status' => Order::STATUS_PENDING,
-                'payment_status' => $request->input('payment_method') === 'cod' 
-                    ? Order::PAYMENT_PENDING 
-                    : Order::PAYMENT_PAID,
-                'payment_method' => $request->input('payment_method'),
-                'billing_address_id' => $billingAddressId,
-                'shipping_address_id' => $shippingAddressId,
-                'subtotal' => $cart->subtotal,
-                'discount' => $cart->discount,
-                'shipping' => $cart->shipping,
-                'tax' => $cart->tax,
-                'total' => $cart->total,
-                'coupon_id' => $cart->coupon_id,
-                'notes' => $request->input('notes'),
-            ]);
-
-            // Create order items
-            foreach ($cart->items as $cartItem) {
-                OrderItem::create([
-                    'order_id' => $order->id,
-                    'product_id' => $cartItem->product_id,
-                    'variant_id' => $cartItem->variant_id,
-                    'product_name' => $cartItem->product->name,
-                    'variant_name' => $cartItem->variant?->name,
-                    'sku' => $cartItem->variant?->sku ?? $cartItem->product->sku,
-                    'quantity' => $cartItem->quantity,
-                    'unit_price' => $cartItem->unit_price,
-                    'total_price' => $cartItem->total_price,
-                    'image' => $cartItem->product->images->first()?->url,
-                ]);
-
-                // Update stock
-                $cartItem->product->decrement('stock_quantity', $cartItem->quantity);
-                $cartItem->product->updateStockStatus();
-            }
-
-            // Update coupon usage
-            if ($cart->coupon) {
-                $cart->coupon->increment('used_count');
-            }
-
-            // Clear cart
-            $cart->clear();
+            $order = $this->createOrderAction->execute($user, $cart, $request->all());
 
             DB::commit();
 
@@ -206,8 +151,7 @@ class OrderController extends Controller
         try {
             // Restore stock
             foreach ($order->items as $item) {
-                $item->product->increment('stock_quantity', $item->quantity);
-                $item->product->updateStockStatus();
+                $this->inventoryService->incrementStock($item->product, $item->quantity);
             }
 
             $order->updateStatus(Order::STATUS_CANCELLED);

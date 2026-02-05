@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Core\Product\Models\Product;
 use App\Models\ProductBundle;
 use App\Models\ProductBundleItem;
 use Illuminate\Http\Request;
@@ -77,7 +78,7 @@ class BundleController extends Controller
         // Calculate regular price from items
         $regularPrice = 0;
         foreach ($validated['items'] as $item) {
-            $product = \App\Models\Product::find($item['product_id']);
+            $product = Product::find($item['product_id']);
             $price = $product->sale_price ?? $product->price;
             $regularPrice += $price * $item['quantity'];
         }
@@ -141,7 +142,7 @@ class BundleController extends Controller
             // Recalculate regular price
             $regularPrice = 0;
             foreach ($validated['items'] as $item) {
-                $product = \App\Models\Product::find($item['product_id']);
+                $product = Product::find($item['product_id']);
                 $price = $product->sale_price ?? $product->price;
                 $regularPrice += $price * $item['quantity'];
             }

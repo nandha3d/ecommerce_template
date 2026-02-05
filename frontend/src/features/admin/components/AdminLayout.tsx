@@ -20,6 +20,7 @@ import { useAppDispatch, useAppSelector } from '../../../hooks/useRedux';
 import { logout } from '../../../store/slices/authSlice';
 import { toggleSidebar } from '../../../store/slices/uiSlice';
 import AdminThemeProvider, { useAdminTheme } from '../theme/AdminThemeProvider';
+import { useConfig } from '../../../core/config/ConfigContext';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -31,6 +32,7 @@ const AdminLayoutInner: React.FC<AdminLayoutProps> = ({ children }) => {
     const { user } = useAppSelector((state) => state.auth);
     const { isSidebarOpen } = useAppSelector((state) => state.ui);
     const { layout, tokens } = useAdminTheme();
+    const { config } = useConfig();
 
     const navItems = [
         { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -65,9 +67,9 @@ const AdminLayoutInner: React.FC<AdminLayoutProps> = ({ children }) => {
                     <div className="flex items-center justify-between h-16 px-6" style={{ borderBottom: `1px solid ${tokens.border}` }}>
                         <Link to="/admin" className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--admin-primary)', color: 'var(--admin-primary-text)' }}>
-                                <span className="font-bold">S</span>
+                                <span className="font-bold">{config['site.name'].charAt(0)}</span>
                             </div>
-                            <span className="font-display font-bold">SupplePro</span>
+                            <span className="font-display font-bold">{config['site.name']}</span>
                         </Link>
                         <button
                             onClick={() => dispatch(toggleSidebar())}

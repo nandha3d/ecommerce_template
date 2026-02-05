@@ -65,6 +65,7 @@ class AttributeController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        \Illuminate\Support\Facades\Log::info('Attribute Store Request:', $request->all());
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'type' => 'required|in:text,color,image,select,button,radio',
@@ -127,6 +128,7 @@ class AttributeController extends Controller
      */
     public function update(Request $request, int $id): JsonResponse
     {
+        \Illuminate\Support\Facades\Log::info("Attribute Update Request ($id):", $request->all());
         $attribute = ProductAttribute::findOrFail($id);
 
         $validated = $request->validate([

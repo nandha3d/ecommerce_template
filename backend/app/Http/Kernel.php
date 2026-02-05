@@ -24,6 +24,7 @@ class Kernel extends HttpKernel
      */
     protected $middlewareGroups = [
         'web' => [
+            \App\Http\Middleware\SecurityHeaders::class,
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
             \Illuminate\Session\Middleware\StartSession::class,
@@ -50,5 +51,8 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
         'license' => \App\Http\Middleware\ValidLicenseMiddleware::class,
+        'payment.rate_limit' => \App\Http\Middleware\PaymentRateLimiter::class,
+        'rate.limit' => \App\Http\Middleware\RateLimiter::class,
+        'cache' => \App\Http\Middleware\CacheHeaders::class,
     ];
 }

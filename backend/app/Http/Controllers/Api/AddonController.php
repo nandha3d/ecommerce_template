@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProductAddon;
-use App\Models\Product;
+use Core\Product\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 

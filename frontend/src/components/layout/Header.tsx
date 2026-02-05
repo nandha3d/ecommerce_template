@@ -16,6 +16,7 @@ import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
 import { toggleCart } from '../../store/slices/cartSlice';
 import { logout } from '../../store/slices/authSlice';
 import { setMobileMenuOpen } from '../../store/slices/uiSlice';
+import { useConfig } from '../../core/config/ConfigContext';
 
 const Header: React.FC = () => {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -29,6 +30,7 @@ const Header: React.FC = () => {
     const { cart } = useAppSelector((state) => state.cart);
     const { isMobileMenuOpen } = useAppSelector((state) => state.ui);
     const { categories } = useAppSelector((state) => state.products);
+    const { config } = useConfig();
 
     const cartItemCount = cart?.items?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
@@ -53,8 +55,8 @@ const Header: React.FC = () => {
                 <div className="container mx-auto flex justify-between items-center text-sm">
                     <p>Free shipping on orders over $50</p>
                     <div className="hidden md:flex items-center gap-4">
-                        <a href="tel:+1234567890" className="hover:text-primary-500 transition-colors">
-                            📞 1-800-SUPPLEMENTS
+                        <a href={`tel:${config['contact.phone']}`} className="hover:text-primary-500 transition-colors">
+                            📞 {config['contact.phone']}
                         </a>
                         <span className="text-neutral-400">|</span>
                         <Link to="/pages/faq" className="hover:text-primary-500 transition-colors">
@@ -79,10 +81,10 @@ const Header: React.FC = () => {
                         {/* Logo */}
                         <Link to="/" className="flex items-center gap-2">
                             <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-xl">S</span>
+                                <span className="text-white font-bold text-xl">{config['site.name'].charAt(0)}</span>
                             </div>
                             <span className="hidden sm:block text-xl font-display font-bold text-primary-900">
-                                SupplePro
+                                {config['site.name']}
                             </span>
                         </Link>
 

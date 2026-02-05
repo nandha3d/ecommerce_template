@@ -24,7 +24,7 @@ class SchemaBuilder
                 'sku' => $model->sku ?? '',
                 'brand' => [
                     '@type' => 'Brand',
-                    'name' => $model->brand->name ?? 'SupplePro',
+                    'name' => $model->brand->name ?? config('app.name'),
                 ],
             ];
 
@@ -55,7 +55,7 @@ class SchemaBuilder
             return [
                 '@context' => 'https://schema.org',
                 '@type' => 'Organization',
-                'name' => 'SupplePro',
+                'name' => config('app.name'),
                 'url' => url('/'),
                 'logo' => asset('logo.png'),
                 'contactPoint' => [

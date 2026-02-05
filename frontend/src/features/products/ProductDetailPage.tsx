@@ -22,7 +22,7 @@ import { addToCart } from '../../store/slices/cartSlice';
 import { ProductCard } from '../../components/layout';
 import { Button, Loader, Badge, ImageZoomModal } from '../../components/ui';
 import { ProductVariant } from '../../types';
-import { getImageUrl } from '../../utils/helpers';
+import { getImageUrl } from '../../utils/imageUtils';
 import toast from 'react-hot-toast';
 
 const ProductDetailPage: React.FC = () => {
@@ -260,7 +260,8 @@ const ProductDetailPage: React.FC = () => {
             // Existing logic cleared it. Keeping clean logic.
             dispatch(clearCurrentProduct());
         };
-    }, [dispatch, slug, product?.slug]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dispatch, slug]);
 
     useEffect(() => {
         if (product) {
@@ -340,15 +341,35 @@ const ProductDetailPage: React.FC = () => {
         layoutVariant === 4
             ? 'grid lg:grid-cols-12 gap-12'
             : layoutVariant === 3
-                ? 'grid grid-cols-1 gap-8'
+                ? 'grid lg:grid-cols-12 gap-6' // 3-column Amazon style
                 : 'grid lg:grid-cols-2 gap-12';
-    const imagesColClass = layoutVariant === 4 ? 'lg:col-span-7' : '';
-    const infoColClass = layoutVariant === 4 ? 'lg:col-span-5' : '';
+    const imagesColClass = layoutVariant === 4 ? 'lg:col-span-7' : layoutVariant === 3 ? 'lg:col-span-5' : '';
+    const infoColClass = layoutVariant === 4 ? 'lg:col-span-5' : layoutVariant === 3 ? 'lg:col-span-4' : '';
+    const buyBoxColClass = layoutVariant === 3 ? 'lg:col-span-3' : ''; // Third column for buy box
     const imagesOrderClass = layoutVariant === 2 ? 'lg:order-2' : 'lg:order-1';
     const infoOrderClass = layoutVariant === 2 ? 'lg:order-1' : 'lg:order-2';
     const infoStickyClass = layoutVariant === 4 ? 'lg:sticky lg:top-24 self-start' : '';
     const tabsOrder = layoutVariant === 5 ? 2 : 1;
     const relatedOrder = layoutVariant === 5 ? 1 : 2;
+
+    // Debug logging
+    useEffect(() => {
+        console.log('ProductDetailPage State:', { isLoading, product, error: (product as any)?.error });
+    }, [isLoading, product]);
+
+    const { error } = useAppSelector((state) => state.products);
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+                <div className="text-red-500 font-medium">Failed to load product</div>
+                <div className="text-sm text-neutral-500">{error}</div>
+                <Button variant="outline" onClick={() => window.location.reload()}>
+                    Retry
+                </Button>
+            </div>
+        );
+    }
 
     if (isLoading || !product) {
         return (
@@ -546,24 +567,26 @@ const ProductDetailPage: React.FC = () => {
                             </span>
                         </div>
 
-                        {/* Price */}
-                        <div className="flex flex-col gap-1">
-                            <div className="flex items-baseline gap-3">
-                                <span className="text-3xl font-bold text-primary-900">
-                                    ${totalPrice.toFixed(2)}
-                                </span>
-                                {discountPercentage > 0 && (
-                                    <span className="text-xl text-neutral-400 line-through">
-                                        ${totalOriginalPrice.toFixed(2)}
+                        {/* Price - Hidden in Layout 3 (shown in buy box) */}
+                        {layoutVariant !== 3 && (
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-baseline gap-3">
+                                    <span className="text-3xl font-bold text-primary-900">
+                                        ${totalPrice.toFixed(2)}
+                                    </span>
+                                    {discountPercentage > 0 && (
+                                        <span className="text-xl text-neutral-400 line-through">
+                                            ${totalOriginalPrice.toFixed(2)}
+                                        </span>
+                                    )}
+                                </div>
+                                {quantity > 1 && (
+                                    <span className="text-sm text-neutral-500">
+                                        ${unitPrice.toFixed(2)} each
                                     </span>
                                 )}
                             </div>
-                            {quantity > 1 && (
-                                <span className="text-sm text-neutral-500">
-                                    ${unitPrice.toFixed(2)} each
-                                </span>
-                            )}
-                        </div>
+                        )}
 
                         {/* Short Description */}
                         {product.short_description && (
@@ -793,95 +816,217 @@ const ProductDetailPage: React.FC = () => {
                             </div>
                         )}
 
-                        {/* Quantity & Add to Cart */}
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center border border-neutral-200 rounded-lg">
-                                <button
-                                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                    className="p-3 hover:bg-neutral-100 transition-colors"
-                                >
-                                    <Minus className="w-4 h-4" />
-                                </button>
-                                <span className="w-12 text-center font-medium">{quantity}</span>
-                                <button
-                                    onClick={() => setQuantity(quantity + 1)}
-                                    className="p-3 hover:bg-neutral-100 transition-colors"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                </button>
-                            </div>
+                        {/* Quantity & Add to Cart - Hidden in Layout 3 (shown in buy box) */}
+                        {layoutVariant !== 3 && (
+                            <>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center border border-neutral-200 rounded-lg">
+                                        <button
+                                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                            className="p-3 hover:bg-neutral-100 transition-colors"
+                                        >
+                                            <Minus className="w-4 h-4" />
+                                        </button>
+                                        <span className="w-12 text-center font-medium">{quantity}</span>
+                                        <button
+                                            onClick={() => setQuantity(quantity + 1)}
+                                            className="p-3 hover:bg-neutral-100 transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </button>
+                                    </div>
 
-                            <Button
-                                onClick={handleAddToCart}
-                                disabled={product.stock_status === 'out_of_stock'}
-                                className="flex-1"
-                                size="lg"
-                                leftIcon={<ShoppingCart className="w-5 h-5" />}
-                            >
-                                {product.stock_status === 'out_of_stock' ? 'Out of Stock' : 'Add to Cart'}
-                            </Button>
+                                    <Button
+                                        onClick={handleAddToCart}
+                                        disabled={product.stock_status === 'out_of_stock'}
+                                        className="flex-1"
+                                        size="lg"
+                                        leftIcon={<ShoppingCart className="w-5 h-5" />}
+                                    >
+                                        {product.stock_status === 'out_of_stock' ? 'Out of Stock' : 'Add to Cart'}
+                                    </Button>
 
-                            <Button
-                                onClick={handleBuyNow}
-                                disabled={product.stock_status === 'out_of_stock'}
-                                variant="secondary"
-                                size="lg"
-                                className="bg-neutral-900 text-white hover:bg-neutral-800"
-                            >
-                                Buy Now
-                            </Button>
+                                    <Button
+                                        onClick={handleBuyNow}
+                                        disabled={product.stock_status === 'out_of_stock'}
+                                        variant="secondary"
+                                        size="lg"
+                                        className="bg-neutral-900 text-white hover:bg-neutral-800"
+                                    >
+                                        Buy Now
+                                    </Button>
 
-                            {isAuthenticated && (
-                                <button className="p-3 border border-neutral-200 rounded-lg hover:border-danger hover:text-danger transition-colors">
-                                    <Heart className="w-5 h-5" />
-                                </button>
-                            )}
-                        </div>
+                                    {isAuthenticated && (
+                                        <button className="p-3 border border-neutral-200 rounded-lg hover:border-danger hover:text-danger transition-colors">
+                                            <Heart className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                </div>
 
-                        {/* Stock Status */}
-                        <div className="flex items-center gap-2">
-                            {product.stock_status === 'in_stock' ? (
-                                <>
-                                    <Check className="w-5 h-5 text-success" />
-                                    <span className="text-success font-medium">In Stock</span>
-                                </>
-                            ) : product.stock_status === 'low_stock' ? (
-                                <>
-                                    <div className="w-2 h-2 bg-warning rounded-full" />
-                                    <span className="text-warning font-medium">Low Stock - Order Soon!</span>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-2 h-2 bg-danger rounded-full" />
-                                    <span className="text-danger font-medium">Out of Stock</span>
-                                </>
-                            )}
-                        </div>
+                                {/* Stock Status */}
+                                <div className="flex items-center gap-2">
+                                    {product.stock_status === 'in_stock' ? (
+                                        <>
+                                            <Check className="w-5 h-5 text-success" />
+                                            <span className="text-success font-medium">In Stock</span>
+                                        </>
+                                    ) : product.stock_status === 'low_stock' ? (
+                                        <>
+                                            <div className="w-2 h-2 bg-warning rounded-full" />
+                                            <span className="text-warning font-medium">Low Stock - Order Soon!</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="w-2 h-2 bg-danger rounded-full" />
+                                            <span className="text-danger font-medium">Out of Stock</span>
+                                        </>
+                                    )}
+                                </div>
 
-                        {/* Features */}
-                        <div className="grid grid-cols-3 gap-4 py-6 border-t border-b border-neutral-100">
-                            <div className="text-center">
-                                <Truck className="w-6 h-6 mx-auto text-primary-500 mb-2" />
-                                <p className="text-sm text-neutral-600">Free Shipping</p>
-                            </div>
-                            <div className="text-center">
-                                <Shield className="w-6 h-6 mx-auto text-primary-500 mb-2" />
-                                <p className="text-sm text-neutral-600">Secure Payment</p>
-                            </div>
-                            <div className="text-center">
-                                <RotateCcw className="w-6 h-6 mx-auto text-primary-500 mb-2" />
-                                <p className="text-sm text-neutral-600">30-Day Returns</p>
-                            </div>
-                        </div>
+                                {/* Features */}
+                                <div className="grid grid-cols-3 gap-4 py-6 border-t border-b border-neutral-100">
+                                    <div className="text-center">
+                                        <Truck className="w-6 h-6 mx-auto text-primary-500 mb-2" />
+                                        <p className="text-sm text-neutral-600">Free Shipping</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <Shield className="w-6 h-6 mx-auto text-primary-500 mb-2" />
+                                        <p className="text-sm text-neutral-600">Secure Payment</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <RotateCcw className="w-6 h-6 mx-auto text-primary-500 mb-2" />
+                                        <p className="text-sm text-neutral-600">30-Day Returns</p>
+                                    </div>
+                                </div>
 
-                        {/* Share */}
-                        <div className="flex items-center gap-4">
-                            <span className="text-sm text-neutral-500">Share:</span>
-                            <button className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
-                                <Share2 className="w-5 h-5 text-neutral-600" />
-                            </button>
-                        </div>
+                                {/* Share */}
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm text-neutral-500">Share:</span>
+                                    <button className="p-2 hover:bg-neutral-100 rounded-lg transition-colors">
+                                        <Share2 className="w-5 h-5 text-neutral-600" />
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
+
+                    {/* Buy Box Column - Layout 3 Only (Amazon Style) */}
+                    {layoutVariant === 3 && (
+                        <div className={`${buyBoxColClass} lg:order-3`}>
+                            <div className="sticky top-24 bg-white border border-neutral-200 rounded-xl p-6 space-y-5 shadow-sm">
+                                {/* Price */}
+                                <div>
+                                    <div className="flex items-baseline gap-3">
+                                        <span className="text-3xl font-bold text-primary-900">
+                                            ${totalPrice.toFixed(2)}
+                                        </span>
+                                        {discountPercentage > 0 && (
+                                            <span className="text-lg text-neutral-400 line-through">
+                                                ${totalOriginalPrice.toFixed(2)}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {quantity > 1 && (
+                                        <p className="text-sm text-neutral-500 mt-1">
+                                            ${unitPrice.toFixed(2)} each
+                                        </p>
+                                    )}
+                                    {discountPercentage > 0 && (
+                                        <p className="text-sm text-success font-medium mt-1">
+                                            You save ${(totalOriginalPrice - totalPrice).toFixed(2)} ({discountPercentage}%)
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Stock Status */}
+                                <div className="flex items-center gap-2 py-3 border-t border-b border-neutral-100">
+                                    {product.stock_status === 'in_stock' ? (
+                                        <>
+                                            <Check className="w-5 h-5 text-success" />
+                                            <span className="text-success font-medium">In Stock</span>
+                                        </>
+                                    ) : product.stock_status === 'low_stock' ? (
+                                        <>
+                                            <div className="w-2 h-2 bg-warning rounded-full" />
+                                            <span className="text-warning font-medium">Low Stock - Order Soon!</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="w-2 h-2 bg-danger rounded-full" />
+                                            <span className="text-danger font-medium">Out of Stock</span>
+                                        </>
+                                    )}
+                                </div>
+
+                                {/* Quantity */}
+                                <div>
+                                    <p className="text-sm font-medium text-neutral-700 mb-2">Quantity</p>
+                                    <div className="flex items-center border border-neutral-200 rounded-lg w-fit">
+                                        <button
+                                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                                            className="p-3 hover:bg-neutral-100 transition-colors"
+                                        >
+                                            <Minus className="w-4 h-4" />
+                                        </button>
+                                        <span className="w-12 text-center font-medium">{quantity}</span>
+                                        <button
+                                            onClick={() => setQuantity(quantity + 1)}
+                                            className="p-3 hover:bg-neutral-100 transition-colors"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Add to Cart */}
+                                <Button
+                                    onClick={handleAddToCart}
+                                    disabled={product.stock_status === 'out_of_stock'}
+                                    fullWidth
+                                    size="lg"
+                                    leftIcon={<ShoppingCart className="w-5 h-5" />}
+                                >
+                                    {product.stock_status === 'out_of_stock' ? 'Out of Stock' : 'Add to Cart'}
+                                </Button>
+
+                                {/* Buy Now */}
+                                <Button
+                                    onClick={handleBuyNow}
+                                    disabled={product.stock_status === 'out_of_stock'}
+                                    variant="secondary"
+                                    fullWidth
+                                    size="lg"
+                                    className="bg-neutral-900 text-white hover:bg-neutral-800"
+                                >
+                                    Buy Now
+                                </Button>
+
+                                {/* Wishlist */}
+                                {isAuthenticated && (
+                                    <button className="w-full p-3 border border-neutral-200 rounded-lg hover:border-danger hover:text-danger transition-colors flex items-center justify-center gap-2">
+                                        <Heart className="w-5 h-5" />
+                                        <span className="text-sm font-medium">Add to Wishlist</span>
+                                    </button>
+                                )}
+
+                                {/* Trust Badges */}
+                                <div className="pt-4 border-t border-neutral-100 space-y-3">
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Truck className="w-5 h-5 text-primary-500" />
+                                        <span className="text-neutral-600">Free Shipping on orders over $50</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Shield className="w-5 h-5 text-primary-500" />
+                                        <span className="text-neutral-600">100% Secure Payment</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <RotateCcw className="w-5 h-5 text-primary-500" />
+                                        <span className="text-neutral-600">30-Day Easy Returns</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-16 flex flex-col gap-16">

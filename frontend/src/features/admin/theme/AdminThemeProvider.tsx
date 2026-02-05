@@ -106,7 +106,18 @@ const AdminThemeProvider: React.FC<AdminThemeProviderProps> = ({ children }) => 
     }, [state]);
 
     const setPresetId = useCallback((presetId: string) => {
-        setState((prev) => ({ ...prev, presetId }));
+        setState((prev) => {
+            // Preserve current layout by resolving it and storing in layoutOverride
+            const currentResolved = resolveAdminTheme(prev);
+            return {
+                ...prev,
+                presetId,
+                // Keep current layout when switching presets (only change colors)
+                layoutOverride: currentResolved.layout,
+                // Clear token overrides when switching presets to get fresh colors
+                tokensOverride: {},
+            };
+        });
     }, []);
 
     const updateTokens = useCallback((patch: Partial<AdminThemeTokens>) => {

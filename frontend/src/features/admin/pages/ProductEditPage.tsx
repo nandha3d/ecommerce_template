@@ -9,14 +9,7 @@ import {
 import AdminLayout from '../components/AdminLayout';
 import { Button, Card, Input, Badge } from '../../../components/ui';
 import api from '../../../services/api';
-
-// Helper to get full image URL
-const getImageUrl = (path: string) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
-    const baseUrl = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
-    return `${baseUrl}${path}`;
-};
+import { processImagesForUpload, getImageUrl } from '../../../utils/imageUtils';
 
 interface ProductImage {
     id?: number;
@@ -253,8 +246,9 @@ const ProductEditPage: React.FC = () => {
     const handleImageUpload = async (files: FileList) => {
         setUploadingImage(true);
         try {
+            const processedFiles = await processImagesForUpload(files);
             const formDataUpload = new FormData();
-            Array.from(files).forEach(file => {
+            processedFiles.forEach(file => {
                 formDataUpload.append('images[]', file);
             });
 

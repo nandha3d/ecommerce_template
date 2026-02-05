@@ -7,3 +7,5 @@ export { default as Loader } from './Loader';
 export { default as Select } from './Select';
 export { default as Pagination } from './Pagination';
 export { default as ImageZoomModal } from './ImageZoomModal';
+export { LazyImage, ResponsiveImage } from './LazyImage';
+

@@ -15,8 +15,10 @@ return [
         'scheme' => 'https',
     ],
 
-    'postmark' => [
-        'token' => env('POSTMARK_TOKEN'),
+    'razorpay' => [
+        'key_id' => env('RAZORPAY_KEY', 'rzp_test_SAWDGjzlq4Lbmg'),
+        'key_secret' => env('RAZORPAY_SECRET', '08TezjIUsWPKLtYeu7evQKj0'),
+        'currency' => env('RAZORPAY_CURRENCY', 'INR'),
     ],
 
     'ses' => [

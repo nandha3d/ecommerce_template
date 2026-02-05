@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Product;
+use Core\Product\Models\Product;
 use App\Services\Seo\SeoRenderer;
 use Illuminate\Http\Response;
 

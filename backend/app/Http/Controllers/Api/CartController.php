@@ -9,9 +9,17 @@ use App\Models\Coupon;
 use App\Http\Resources\CartResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Core\Cart\Services\CartService;
 
 class CartController extends Controller
 {
+    private CartService $cartService;
+
+    public function __construct(CartService $cartService)
+    {
+        $this->cartService = $cartService;
+    }
+
     /**
      * Get current cart.
      */
@@ -38,7 +46,8 @@ class CartController extends Controller
         ]);
 
         $cart = $this->getOrCreateCart($request);
-        $cart->addItem(
+        $this->cartService->addItem(
+            $cart,
             $request->input('product_id'),
             $request->input('quantity', 1),
             $request->input('variant_id')
@@ -65,9 +74,7 @@ class CartController extends Controller
         $cart = $this->getOrCreateCart($request);
         $item = $cart->items()->findOrFail($itemId);
         
-        $item->update([
-            'quantity' => $request->input('quantity'),
-        ]);
+        $this->cartService->updateItem($item, $request->input('quantity'));
 
         $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
@@ -84,7 +91,9 @@ class CartController extends Controller
     public function removeItem(Request $request, int $itemId): JsonResponse
     {
         $cart = $this->getOrCreateCart($request);
-        $cart->items()->where('id', $itemId)->delete();
+        $item = $cart->items()->where('id', $itemId)->firstOrFail();
+        
+        $this->cartService->removeItem($item);
 
         $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
@@ -101,7 +110,7 @@ class CartController extends Controller
     public function clear(Request $request): JsonResponse
     {
         $cart = $this->getOrCreateCart($request);
-        $cart->clear();
+        $this->cartService->clear($cart);
 
         return response()->json([
             'success' => true,
@@ -211,7 +220,7 @@ class CartController extends Controller
         }
 
         $userCart = Cart::firstOrCreate(['user_id' => auth()->id()]);
-        $userCart->merge($guestCart);
+        $this->cartService->merge($userCart, $guestCart);
 
         $userCart->load(['items.product.images', 'items.variant', 'coupon']);
 

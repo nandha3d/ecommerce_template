@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../../../services/api';
+import { useConfig } from '../../../core/config/ConfigContext';
 
 interface LicenseStatus {
     activated: boolean;
@@ -34,6 +35,7 @@ const LicenseActivation: React.FC = () => {
     const [activating, setActivating] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const { config } = useConfig();
 
     useEffect(() => {
         fetchStatus();
@@ -120,7 +122,7 @@ const LicenseActivation: React.FC = () => {
         <div className="license-page">
             <div className="license-header">
                 <h1>🔐 License Management</h1>
-                <p>Manage your SupplePro license and unlock premium features</p>
+                <p>Manage your {config['site.name']} license and unlock premium features</p>
             </div>
 
             {/* Current License Status */}
@@ -154,7 +156,7 @@ const LicenseActivation: React.FC = () => {
                         <button onClick={handleRevalidate} className="btn-secondary">
                             🔄 Revalidate
                         </button>
-                        <a href="https://supplepro.com/pricing" target="_blank" rel="noopener noreferrer" className="btn-upgrade">
+                        <a href="#" className="btn-upgrade">
                             ⬆️ Upgrade License
                         </a>
                     </div>
@@ -191,7 +193,7 @@ const LicenseActivation: React.FC = () => {
                 </form>
 
                 <p className="help-text">
-                    Don't have a license? <a href="https://supplepro.com/pricing" target="_blank" rel="noopener noreferrer">Purchase one here</a>
+                    Don't have a license? <a href="#" target="_blank" rel="noopener noreferrer">Purchase one here</a>
                 </p>
             </div>
 

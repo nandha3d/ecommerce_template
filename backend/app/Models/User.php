@@ -78,7 +78,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function wishlist()
     {
-        return $this->belongsToMany(Product::class, 'wishlists')
+        return $this->belongsToMany(\Core\Product\Models\Product::class, 'wishlists')
                     ->withTimestamps();
     }
 

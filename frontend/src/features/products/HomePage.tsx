@@ -114,7 +114,7 @@ const HomePage: React.FC = () => {
                             </p>
                             <div className="flex flex-wrap gap-4">
                                 <Link to="/products">
-                                    <Button size="lg" className="bg-white text-primary-900 hover:bg-white/90">
+                                    <Button size="lg" variant="ghost" className="bg-white !text-primary-700 hover:bg-white/90 font-bold shadow-lg">
                                         Shop Now
                                         <ArrowRight className="w-5 h-5 ml-2" />
                                     </Button>

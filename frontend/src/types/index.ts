@@ -146,6 +146,8 @@ export interface Category {
     parent_id?: number;
     children?: Category[];
     product_count?: number;
+    is_active: boolean;
+    sort_order?: number;
 }
 
 // Cart types
@@ -308,6 +310,7 @@ export interface ProductFilters {
 export interface LoginCredentials {
     email: string;
     password: string;
+    remember?: boolean;
 }
 
 export interface RegisterData {

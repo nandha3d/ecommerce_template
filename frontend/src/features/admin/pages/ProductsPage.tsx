@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Eye, RefreshCw, MoreVertical, Check, X } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import { Button, Card, Badge, Pagination, Modal } from '../../../components/ui';
-import { getImageUrl } from '../../../utils/helpers';
+import { getImageUrl } from '../../../utils/imageUtils';
 import api from '../../../services/api';
 
 interface Product {

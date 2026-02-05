@@ -52,6 +52,12 @@ class AuthController extends Controller
     {
         // Use validated data to ensure only email/password are processed
         $credentials = $request->validated();
+        
+        // Handle Remember Me
+        if ($request->boolean('remember')) {
+            $ttl = env('JWT_REMEMBER_TTL', 20160); // Default 14 days
+            JWTAuth::factory()->setTTL($ttl);
+        }
 
         if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json([
@@ -72,7 +78,7 @@ class AuthController extends Controller
                     'access_token' => $token,
                     'refresh_token' => $refreshToken,
                     'token_type' => 'Bearer',
-                    'expires_in' => config('jwt.ttl') * 60,
+                    'expires_in' => JWTAuth::factory()->getTTL() * 60,
                 ],
             ],
         ]);

@@ -14,11 +14,19 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Get credentials from environment
+        $adminEmail = env('ADMIN_EMAIL', 'admin@shopkart.com');
+        $adminPassword = env('ADMIN_PASSWORD', 'ChangeMe123!');
+        $adminName = env('ADMIN_NAME', 'Admin User');
+        
+        $testCustomerEmail = env('TEST_CUSTOMER_EMAIL', 'customer@shopkart.com');
+        $testCustomerPassword = env('TEST_CUSTOMER_PASSWORD', 'customer123');
+
         // Create Admin User
         $adminId = DB::table('users')->insertGetId([
-            'name' => 'Admin User',
-            'email' => 'admin@supplepro.com',
-            'password' => Hash::make('admin123'),
+            'name' => $adminName,
+            'email' => $adminEmail,
+            'password' => Hash::make($adminPassword),
             'role' => 'admin',
             'email_verified_at' => now(),
             'created_at' => now(),
@@ -28,8 +36,8 @@ class DatabaseSeeder extends Seeder
         // Create Test Customer
         DB::table('users')->insert([
             'name' => 'John Doe',
-            'email' => 'customer@supplepro.com',
-            'password' => Hash::make('customer123'),
+            'email' => $testCustomerEmail,
+            'password' => Hash::make($testCustomerPassword),
             'role' => 'customer',
             'email_verified_at' => now(),
             'created_at' => now(),
@@ -184,11 +192,11 @@ class DatabaseSeeder extends Seeder
         $this->command->info('Database seeded successfully!');
         $this->command->info('');
         $this->command->info('Admin Credentials:');
-        $this->command->info('  Email: admin@supplepro.com');
-        $this->command->info('  Password: admin123');
+        $this->command->info('  Email: ' . env('ADMIN_EMAIL', 'admin@shopkart.com'));
+        $this->command->warn('  Password: (set in ADMIN_PASSWORD env variable)');
         $this->command->info('');
         $this->command->info('Customer Credentials:');
-        $this->command->info('  Email: customer@supplepro.com');
-        $this->command->info('  Password: customer123');
+        $this->command->info('  Email: ' . env('TEST_CUSTOMER_EMAIL', 'customer@shopkart.com'));
+        $this->command->warn('  Password: (set in TEST_CUSTOMER_PASSWORD env variable)');
     }
 }

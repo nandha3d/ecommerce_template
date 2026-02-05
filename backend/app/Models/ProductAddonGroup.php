@@ -33,7 +33,7 @@ class ProductAddonGroup extends Model
 
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(\Core\Product\Models\Product::class);
     }
 
     public function options(): HasMany

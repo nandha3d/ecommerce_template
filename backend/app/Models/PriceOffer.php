@@ -46,7 +46,7 @@ class PriceOffer extends Model
      */
     public function products()
     {
-        return $this->belongsToMany(Product::class, 'price_offer_products', 'offer_id', 'product_id');
+        return $this->belongsToMany(\Core\Product\Models\Product::class, 'price_offer_products', 'offer_id', 'product_id');
     }
 
     /**

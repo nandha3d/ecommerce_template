@@ -16,7 +16,7 @@ class MetaBuilder
     public static function build(string $type, $model = null): array
     {
         $meta = [
-            'title' => 'SupplePro - Premium Supplements',
+            'title' => config('app.name') . ' - Premium Supplements',
             'description' => 'Discover the best supplements for your health and fitness journey.',
             'image' => asset('logo.png'), // Should be replaced with actual default OG
             'type' => 'website',
@@ -24,7 +24,7 @@ class MetaBuilder
         ];
 
         if ($type === 'product' && $model) {
-            $meta['title'] = $model->name . ' | SupplePro';
+            $meta['title'] = $model->name . ' | ' . config('app.name');
             $meta['description'] = Str::limit(strip_tags($model->description), 160);
             $meta['canonical'] = url('/product/' . $model->slug);
             $meta['type'] = 'product';

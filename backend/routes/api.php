@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ProductController;
+use Core\System\Controllers\SystemController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ModuleController;
@@ -24,6 +25,19 @@ use App\Http\Controllers\Api\LicenseController;
 | be assigned to the "api" middleware group.
 |
 */
+
+Route::get('/test-attributes', function () {
+    try {
+        $attributes = \App\Models\ProductAttribute::with('options')->get();
+        return response()->json([
+            'count' => $attributes->count(),
+            'data' => $attributes
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json(['error' => $e->getMessage()], 500);
+    }
+});
+
 
 // API Version 1
 Route::prefix('v1')->group(function () {
@@ -75,6 +89,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/{slug}', [ProductController::class, 'show']);
         Route::get('/{id}/related', [ProductController::class, 'related']);
     });
+
+    // ============================================
+    // System Config Route (Public)
+    // ============================================
+    Route::get('/system/config', [SystemController::class, 'getConfig']);
 
     // ============================================
     // Cart Routes (Guest + Authenticated)
@@ -246,7 +265,12 @@ Route::prefix('v1')->group(function () {
     // Payment Gateway Routes
     // ============================================
     Route::get('/payment/gateways', [PaymentController::class, 'gateways']);
-    Route::post('/payment/initiate', [PaymentController::class, 'initiate']);
+    
+    // Payment routes with rate limiting and fraud protection
+    Route::middleware(['payment.rate_limit'])->group(function () {
+        Route::post('/payment/initiate', [PaymentController::class, 'initiate']);
+    });
+    
     Route::post('/payment/verify', [PaymentController::class, 'verify']);
     Route::post('/payment/failed', [PaymentController::class, 'failed']);
     
@@ -291,12 +315,7 @@ Route::prefix('v1')->group(function () {
         Route::delete('/upload/image', [\App\Http\Controllers\Admin\ImageUploadController::class, 'delete']);
 
         // Categories
-        Route::get('/categories', function () {
-            return response()->json([
-                'success' => true,
-                'data' => \App\Models\Category::orderBy('name')->get(),
-            ]);
-        });
+        Route::apiResource('categories', \App\Http\Controllers\Admin\CategoryController::class);
 
         // Brands
         Route::get('/brands', function () {
@@ -313,6 +332,36 @@ Route::prefix('v1')->group(function () {
         Route::get('/attributes/{id}', [\App\Http\Controllers\Admin\AttributeController::class, 'show']);
         Route::put('/attributes/{id}', [\App\Http\Controllers\Admin\AttributeController::class, 'update']);
         Route::delete('/attributes/{id}', [\App\Http\Controllers\Admin\AttributeController::class, 'destroy']);
+
+        // ============================================
+        // Analytics Routes
+        // ============================================
+        Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\Admin\AnalyticsController::class, 'dashboard']);
+
+        // ============================================
+        // Fraud Detection Routes
+        // ============================================
+        Route::prefix('fraud')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Api\Admin\FraudController::class, 'dashboard']);
+            Route::get('/checks', [\App\Http\Controllers\Api\Admin\FraudController::class, 'checks']);
+            Route::get('/blocked', [\App\Http\Controllers\Api\Admin\FraudController::class, 'blockedEntities']);
+            Route::post('/block', [\App\Http\Controllers\Api\Admin\FraudController::class, 'block']);
+            Route::delete('/unblock/{id}', [\App\Http\Controllers\Api\Admin\FraudController::class, 'unblock']);
+            Route::get('/ip/{ip}', [\App\Http\Controllers\Api\Admin\FraudController::class, 'ipHistory']);
+            Route::get('/failed-payments', [\App\Http\Controllers\Api\Admin\FraudController::class, 'failedPayments']);
+        });
+
+        // ============================================
+        // Theme Settings Routes
+        // ============================================
+        Route::prefix('theme')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\Admin\ThemeSettingsController::class, 'index']);
+            Route::put('/', [\App\Http\Controllers\Api\Admin\ThemeSettingsController::class, 'update']);
+            Route::post('/reset', [\App\Http\Controllers\Api\Admin\ThemeSettingsController::class, 'reset']);
+        });
     });
 });
+
+
+
 

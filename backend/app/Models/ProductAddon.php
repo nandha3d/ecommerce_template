@@ -32,7 +32,7 @@ class ProductAddon extends Model
      */
     public function products()
     {
-        return $this->belongsToMany(Product::class, 'product_addon_product', 'addon_id', 'product_id')
+        return $this->belongsToMany(\Core\Product\Models\Product::class, 'product_addon_product', 'addon_id', 'product_id')
             ->withPivot('sort_order');
     }
 

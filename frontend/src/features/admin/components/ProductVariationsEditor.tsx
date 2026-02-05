@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../../../services/api';
+import { convertToWebP } from '../../../utils/imageUtils';
 
 interface Attribute {
   id: number;
@@ -86,11 +87,11 @@ const ProductVariationsEditor: React.FC<Props> = ({
   };
 
   const handleImageUpload = async (index: number, file: File) => {
-    const formData = new FormData();
-    formData.append('image', file);
-    formData.append('type', 'variant');
-
     try {
+      const webpFile = await convertToWebP(file);
+      const formData = new FormData();
+      formData.append('image', webpFile);
+      formData.append('type', 'variant');
       const response = await api.post('/admin/upload/image', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',

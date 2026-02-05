@@ -10,17 +10,23 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
+        $adminEmail = env('ADMIN_EMAIL', 'admin@shopkart.com');
+        $adminPassword = env('ADMIN_PASSWORD', 'ChangeMe123!');
+        $adminName = env('ADMIN_NAME', 'Admin');
+
         User::firstOrCreate(
-            ['email' => 'admin@supplepro.com'],
+            ['email' => $adminEmail],
             [
-                'name' => 'Admin',
-                'email' => 'admin@supplepro.com',
-                'password' => Hash::make('admin123'),
+                'name' => $adminName,
+                'email' => $adminEmail,
+                'password' => Hash::make($adminPassword),
                 'role' => 'admin',
                 'email_verified_at' => now(),
             ]
         );
 
-        $this->command->info('Admin user created: admin@supplepro.com / admin123');
+        $this->command->info("Admin user created: {$adminEmail}");
+        $this->command->warn('Password is set from ADMIN_PASSWORD env variable');
     }
 }
+

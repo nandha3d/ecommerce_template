@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import { addToCart } from '../../store/slices/cartSlice';
 import { Badge, Button } from '../ui';
 import toast from 'react-hot-toast';
+import { getImageUrl } from '../../utils/imageUtils';
 
 interface ProductCardProps {
     product: Product;
@@ -51,7 +52,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
             {/* Image Container */}
             <div className="relative aspect-square overflow-hidden bg-neutral-50">
                 <img
-                    src={product.images[0]?.url || '/placeholder-product.jpg'}
+                    src={getImageUrl(product.images[0]?.url)}
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
@@ -139,8 +140,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
                             <Star
                                 key={i}
                                 className={`w-4 h-4 ${i < Math.round(product.average_rating)
-                                        ? 'text-warning fill-warning'
-                                        : 'text-neutral-300'
+                                    ? 'text-warning fill-warning'
+                                    : 'text-neutral-300'
                                     }`}
                             />
                         ))}

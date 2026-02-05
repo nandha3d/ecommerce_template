@@ -47,7 +47,7 @@ class ProductBundle extends Model
      */
     public function products()
     {
-        return $this->belongsToMany(Product::class, 'product_bundle_items', 'bundle_id', 'product_id')
+        return $this->belongsToMany(\Core\Product\Models\Product::class, 'product_bundle_items', 'bundle_id', 'product_id')
             ->withPivot(['variant_id', 'quantity', 'sort_order']);
     }
 

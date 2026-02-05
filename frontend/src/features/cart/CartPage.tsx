@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import { useStoreLayoutSettings } from '../../storeLayout/StoreLayoutProvider';
 import { updateCartItem, removeFromCart, applyCoupon, removeCoupon } from '../../store/slices/cartSlice';
 import { Button, Input, Loader } from '../../components/ui';
+import { SEO } from '../../components/common/SEO';
 import toast from 'react-hot-toast';
 
 const CartPage: React.FC = () => {
@@ -296,6 +297,7 @@ const CartPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-neutral-50 py-8">
+            <SEO title="Shopping Cart" description="Review your cart items before checkout" noindex />
             <div className="container mx-auto px-4">
                 <h1 className="text-3xl font-display font-bold text-primary-900 mb-8">
                     Shopping Cart

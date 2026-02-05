@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
+use Core\Product\Models\Product;
 use App\Models\Category;
 use App\Models\Brand;
 use App\Http\Resources\ProductResource;
@@ -220,16 +220,23 @@ class ProductController extends Controller
      */
     public function categories(): JsonResponse
     {
-        $categories = Category::withCount('products')
-                              ->whereNull('parent_id')
-                              ->with('children')
-                              ->orderBy('name')
-                              ->get();
+        try {
+            $categories = Category::whereNull('parent_id')
+                                  ->with('children')
+                                  ->orderBy('name')
+                                  ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => $categories,
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $categories,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch categories',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**

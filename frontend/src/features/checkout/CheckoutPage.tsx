@@ -13,6 +13,7 @@ import { useAppSelector } from '../../hooks/useRedux';
 import { useStoreLayoutSettings } from '../../storeLayout/StoreLayoutProvider';
 import { orderService } from '../../services';
 import { Button, Input, Loader } from '../../components/ui';
+import { SEO } from '../../components/common/SEO';
 import { Address } from '../../types';
 import toast from 'react-hot-toast';
 
@@ -195,6 +196,7 @@ const CheckoutPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-neutral-50 py-8">
+            <SEO title="Checkout" description="Complete your purchase securely" noindex />
             <div className="container mx-auto px-4">
                 <h1 className="text-3xl font-display font-bold text-primary-900 mb-8">Checkout</h1>
 
@@ -209,10 +211,10 @@ const CheckoutPage: React.FC = () => {
                                 >
                                     <div
                                         className={`w-10 h-10 rounded-full flex items-center justify-center ${index < stepIndex
-                                                ? 'bg-success text-white'
-                                                : index === stepIndex
-                                                    ? 'bg-primary-500 text-white'
-                                                    : 'bg-neutral-100'
+                                            ? 'bg-success text-white'
+                                            : index === stepIndex
+                                                ? 'bg-primary-500 text-white'
+                                                : 'bg-neutral-100'
                                             }`}
                                     >
                                         {index < stepIndex ? <Check className="w-5 h-5" /> : step.icon}
@@ -233,279 +235,6 @@ const CheckoutPage: React.FC = () => {
                         {summaryFirst && orderSummary}
                         <div>
                             <form onSubmit={handleSubmit(handlePlaceOrder)}>
-                            {/* Address Step */}
-                            {currentStep === 'address' && (
-                                <div className="bg-white rounded-xl p-6 shadow-card">
-                                    <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Address</h2>
-
-                                    {savedAddresses.length > 0 && (
-                                        <div className="space-y-4 mb-6">
-                                            {savedAddresses.map((addr) => (
-                                                <label
-                                                    key={addr.id}
-                                                    className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedAddress === addr.id && !useNewAddress
-                                                            ? 'border-primary-500 bg-primary-50'
-                                                            : 'border-neutral-200 hover:border-neutral-300'
-                                                        }`}
-                                                >
-                                                    <input
-                                                        type="radio"
-                                                        name="address"
-                                                        checked={selectedAddress === addr.id && !useNewAddress}
-                                                        onChange={() => {
-                                                            setSelectedAddress(addr.id);
-                                                            setUseNewAddress(false);
-                                                        }}
-                                                        className="mt-1"
-                                                    />
-                                                    <div>
-                                                        <p className="font-medium">{addr.name}</p>
-                                                        <p className="text-sm text-neutral-600">
-                                                            {addr.address_line_1}
-                                                            {addr.address_line_2 && `, ${addr.address_line_2}`}
-                                                        </p>
-                                                        <p className="text-sm text-neutral-600">
-                                                            {addr.city}, {addr.state} {addr.postal_code}
-                                                        </p>
-                                                        <p className="text-sm text-neutral-600">{addr.phone}</p>
-                                                    </div>
-                                                </label>
-                                            ))}
-                                            <button
-                                                type="button"
-                                                onClick={() => setUseNewAddress(!useNewAddress)}
-                                                className="text-primary-500 font-medium hover:underline"
-                                            >
-                                                {useNewAddress ? 'Use saved address' : '+ Add new address'}
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    {useNewAddress && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <Input
-                                                label="Full Name"
-                                                placeholder="John Doe"
-                                                {...register('name', { required: 'Name is required' })}
-                                                error={errors.name?.message as string}
-                                            />
-                                            <Input
-                                                label="Phone Number"
-                                                placeholder="+1 (555) 000-0000"
-                                                {...register('phone', { required: 'Phone is required' })}
-                                                error={errors.phone?.message as string}
-                                            />
-                                            <div className="md:col-span-2">
-                                                <Input
-                                                    label="Address Line 1"
-                                                    placeholder="Street address"
-                                                    {...register('address_line_1', { required: 'Address is required' })}
-                                                    error={errors.address_line_1?.message as string}
-                                                />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <Input
-                                                    label="Address Line 2 (Optional)"
-                                                    placeholder="Apartment, suite, etc."
-                                                    {...register('address_line_2')}
-                                                />
-                                            </div>
-                                            <Input
-                                                label="City"
-                                                placeholder="City"
-                                                {...register('city', { required: 'City is required' })}
-                                                error={errors.city?.message as string}
-                                            />
-                                            <Input
-                                                label="State"
-                                                placeholder="State"
-                                                {...register('state', { required: 'State is required' })}
-                                                error={errors.state?.message as string}
-                                            />
-                                            <Input
-                                                label="Postal Code"
-                                                placeholder="12345"
-                                                {...register('postal_code', { required: 'Postal code is required' })}
-                                                error={errors.postal_code?.message as string}
-                                            />
-                                            <Input
-                                                label="Country"
-                                                placeholder="United States"
-                                                defaultValue="United States"
-                                                {...register('country', { required: 'Country is required' })}
-                                                error={errors.country?.message as string}
-                                            />
-                                            <div className="md:col-span-2">
-                                                <label className="flex items-center gap-2 cursor-pointer">
-                                                    <input type="checkbox" {...register('save_address')} className="rounded" />
-                                                    <span className="text-sm text-neutral-600">Save this address for future orders</span>
-                                                </label>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <div className="mt-8 flex justify-end">
-                                        <Button onClick={nextStep}>
-                                            Continue to Shipping
-                                            <ChevronRight className="w-5 h-5 ml-2" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Shipping Step */}
-                            {currentStep === 'shipping' && (
-                                <div className="bg-white rounded-xl p-6 shadow-card">
-                                    <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Method</h2>
-
-                                    <div className="space-y-4">
-                                        {shippingOptions.map((option) => (
-                                            <label
-                                                key={option.id}
-                                                className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${shippingMethod === option.id
-                                                        ? 'border-primary-500 bg-primary-50'
-                                                        : 'border-neutral-200 hover:border-neutral-300'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <input
-                                                        type="radio"
-                                                        name="shipping"
-                                                        checked={shippingMethod === option.id}
-                                                        onChange={() => setShippingMethod(option.id)}
-                                                    />
-                                                    <div>
-                                                        <p className="font-medium">{option.name}</p>
-                                                        <p className="text-sm text-neutral-600">{option.days}</p>
-                                                    </div>
-                                                </div>
-                                                <span className="font-bold">
-                                                    {option.price === 0 ? 'FREE' : `$${option.price.toFixed(2)}`}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-
-                                    <div className="mt-8 flex justify-between">
-                                        <Button variant="ghost" onClick={prevStep}>
-                                            Back
-                                        </Button>
-                                        <Button onClick={nextStep}>
-                                            Continue to Payment
-                                            <ChevronRight className="w-5 h-5 ml-2" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Payment Step */}
-                            {currentStep === 'payment' && (
-                                <div className="bg-white rounded-xl p-6 shadow-card">
-                                    <h2 className="text-xl font-bold text-primary-900 mb-6">Payment Method</h2>
-
-                                    <div className="space-y-4 mb-6">
-                                        {[
-                                            { id: 'card', name: 'Credit/Debit Card', icon: '💳' },
-                                            { id: 'paypal', name: 'PayPal', icon: '🅿️' },
-                                            { id: 'cod', name: 'Cash on Delivery', icon: '💵' },
-                                        ].map((method) => (
-                                            <label
-                                                key={method.id}
-                                                className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === method.id
-                                                        ? 'border-primary-500 bg-primary-50'
-                                                        : 'border-neutral-200 hover:border-neutral-300'
-                                                    }`}
-                                            >
-                                                <input
-                                                    type="radio"
-                                                    name="payment"
-                                                    checked={paymentMethod === method.id}
-                                                    onChange={() => setPaymentMethod(method.id)}
-                                                />
-                                                <span className="text-2xl">{method.icon}</span>
-                                                <span className="font-medium">{method.name}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-
-                                    {paymentMethod === 'card' && (
-                                        <div className="space-y-4 p-4 bg-neutral-50 rounded-lg">
-                                            <Input label="Card Number" placeholder="1234 5678 9012 3456" />
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <Input label="Expiry Date" placeholder="MM/YY" />
-                                                <Input label="CVV" placeholder="123" />
-                                            </div>
-                                            <Input label="Name on Card" placeholder="John Doe" />
-                                        </div>
-                                    )}
-
-                                    <div className="mt-8 flex justify-between">
-                                        <Button variant="ghost" onClick={prevStep}>
-                                            Back
-                                        </Button>
-                                        <Button onClick={nextStep}>
-                                            Review Order
-                                            <ChevronRight className="w-5 h-5 ml-2" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Review Step */}
-                            {currentStep === 'review' && (
-                                <div className="bg-white rounded-xl p-6 shadow-card">
-                                    <h2 className="text-xl font-bold text-primary-900 mb-6">Review Order</h2>
-
-                                    <div className="space-y-6">
-                                        {/* Order Items */}
-                                        <div>
-                                            <h3 className="font-medium text-neutral-900 mb-4">Order Items</h3>
-                                            <div className="space-y-3">
-                                                {cart.items.map((item) => (
-                                                    <div key={item.id} className="flex items-center gap-4">
-                                                        <img
-                                                            src={item.product.images[0]?.url || '/placeholder.jpg'}
-                                                            alt={item.product.name}
-                                                            className="w-16 h-16 object-cover rounded-lg"
-                                                        />
-                                                        <div className="flex-1">
-                                                            <p className="font-medium">{item.product.name}</p>
-                                                            <p className="text-sm text-neutral-500">Qty: {item.quantity}</p>
-                                                        </div>
-                                                        <p className="font-bold">${item.total_price.toFixed(2)}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="border-t border-neutral-100 pt-4">
-                                            <div className="flex items-center gap-2 text-sm text-neutral-600">
-                                                <Lock className="w-4 h-4" />
-                                                Your payment information is secure
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-8 flex justify-between">
-                                        <Button variant="ghost" onClick={prevStep}>
-                                            Back
-                                        </Button>
-                                        <Button type="submit" size="lg" isLoading={isSubmitting}>
-                                            <Lock className="w-5 h-5 mr-2" />
-                                            Place Order - ${cart.total.toFixed(2)}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                            </form>
-                        </div>
-                        {!summaryFirst && orderSummary}
-                    </div>
-                ) : (
-                    <div className={gridWrapperClass}>
-                        {/* Main Content */}
-                        <div className={mainColClass}>
-                            <form onSubmit={handleSubmit(handlePlaceOrder)}>
                                 {/* Address Step */}
                                 {currentStep === 'address' && (
                                     <div className="bg-white rounded-xl p-6 shadow-card">
@@ -517,8 +246,8 @@ const CheckoutPage: React.FC = () => {
                                                     <label
                                                         key={addr.id}
                                                         className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedAddress === addr.id && !useNewAddress
-                                                                ? 'border-primary-500 bg-primary-50'
-                                                                : 'border-neutral-200 hover:border-neutral-300'
+                                                            ? 'border-primary-500 bg-primary-50'
+                                                            : 'border-neutral-200 hover:border-neutral-300'
                                                             }`}
                                                     >
                                                         <input
@@ -636,8 +365,8 @@ const CheckoutPage: React.FC = () => {
                                                 <label
                                                     key={option.id}
                                                     className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${shippingMethod === option.id
-                                                            ? 'border-primary-500 bg-primary-50'
-                                                            : 'border-neutral-200 hover:border-neutral-300'
+                                                        ? 'border-primary-500 bg-primary-50'
+                                                        : 'border-neutral-200 hover:border-neutral-300'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-4">
@@ -685,8 +414,281 @@ const CheckoutPage: React.FC = () => {
                                                 <label
                                                     key={method.id}
                                                     className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === method.id
+                                                        ? 'border-primary-500 bg-primary-50'
+                                                        : 'border-neutral-200 hover:border-neutral-300'
+                                                        }`}
+                                                >
+                                                    <input
+                                                        type="radio"
+                                                        name="payment"
+                                                        checked={paymentMethod === method.id}
+                                                        onChange={() => setPaymentMethod(method.id)}
+                                                    />
+                                                    <span className="text-2xl">{method.icon}</span>
+                                                    <span className="font-medium">{method.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        {paymentMethod === 'card' && (
+                                            <div className="space-y-4 p-4 bg-neutral-50 rounded-lg">
+                                                <Input label="Card Number" placeholder="1234 5678 9012 3456" />
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <Input label="Expiry Date" placeholder="MM/YY" />
+                                                    <Input label="CVV" placeholder="123" />
+                                                </div>
+                                                <Input label="Name on Card" placeholder="John Doe" />
+                                            </div>
+                                        )}
+
+                                        <div className="mt-8 flex justify-between">
+                                            <Button variant="ghost" onClick={prevStep}>
+                                                Back
+                                            </Button>
+                                            <Button onClick={nextStep}>
+                                                Review Order
+                                                <ChevronRight className="w-5 h-5 ml-2" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Review Step */}
+                                {currentStep === 'review' && (
+                                    <div className="bg-white rounded-xl p-6 shadow-card">
+                                        <h2 className="text-xl font-bold text-primary-900 mb-6">Review Order</h2>
+
+                                        <div className="space-y-6">
+                                            {/* Order Items */}
+                                            <div>
+                                                <h3 className="font-medium text-neutral-900 mb-4">Order Items</h3>
+                                                <div className="space-y-3">
+                                                    {cart.items.map((item) => (
+                                                        <div key={item.id} className="flex items-center gap-4">
+                                                            <img
+                                                                src={item.product.images[0]?.url || '/placeholder.jpg'}
+                                                                alt={item.product.name}
+                                                                className="w-16 h-16 object-cover rounded-lg"
+                                                            />
+                                                            <div className="flex-1">
+                                                                <p className="font-medium">{item.product.name}</p>
+                                                                <p className="text-sm text-neutral-500">Qty: {item.quantity}</p>
+                                                            </div>
+                                                            <p className="font-bold">${item.total_price.toFixed(2)}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="border-t border-neutral-100 pt-4">
+                                                <div className="flex items-center gap-2 text-sm text-neutral-600">
+                                                    <Lock className="w-4 h-4" />
+                                                    Your payment information is secure
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-8 flex justify-between">
+                                            <Button variant="ghost" onClick={prevStep}>
+                                                Back
+                                            </Button>
+                                            <Button type="submit" size="lg" isLoading={isSubmitting}>
+                                                <Lock className="w-5 h-5 mr-2" />
+                                                Place Order - ${cart.total.toFixed(2)}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </form>
+                        </div>
+                        {!summaryFirst && orderSummary}
+                    </div>
+                ) : (
+                    <div className={gridWrapperClass}>
+                        {/* Main Content */}
+                        <div className={mainColClass}>
+                            <form onSubmit={handleSubmit(handlePlaceOrder)}>
+                                {/* Address Step */}
+                                {currentStep === 'address' && (
+                                    <div className="bg-white rounded-xl p-6 shadow-card">
+                                        <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Address</h2>
+
+                                        {savedAddresses.length > 0 && (
+                                            <div className="space-y-4 mb-6">
+                                                {savedAddresses.map((addr) => (
+                                                    <label
+                                                        key={addr.id}
+                                                        className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedAddress === addr.id && !useNewAddress
                                                             ? 'border-primary-500 bg-primary-50'
                                                             : 'border-neutral-200 hover:border-neutral-300'
+                                                            }`}
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            name="address"
+                                                            checked={selectedAddress === addr.id && !useNewAddress}
+                                                            onChange={() => {
+                                                                setSelectedAddress(addr.id);
+                                                                setUseNewAddress(false);
+                                                            }}
+                                                            className="mt-1"
+                                                        />
+                                                        <div>
+                                                            <p className="font-medium">{addr.name}</p>
+                                                            <p className="text-sm text-neutral-600">
+                                                                {addr.address_line_1}
+                                                                {addr.address_line_2 && `, ${addr.address_line_2}`}
+                                                            </p>
+                                                            <p className="text-sm text-neutral-600">
+                                                                {addr.city}, {addr.state} {addr.postal_code}
+                                                            </p>
+                                                            <p className="text-sm text-neutral-600">{addr.phone}</p>
+                                                        </div>
+                                                    </label>
+                                                ))}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setUseNewAddress(!useNewAddress)}
+                                                    className="text-primary-500 font-medium hover:underline"
+                                                >
+                                                    {useNewAddress ? 'Use saved address' : '+ Add new address'}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {useNewAddress && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <Input
+                                                    label="Full Name"
+                                                    placeholder="John Doe"
+                                                    {...register('name', { required: 'Name is required' })}
+                                                    error={errors.name?.message as string}
+                                                />
+                                                <Input
+                                                    label="Phone Number"
+                                                    placeholder="+1 (555) 000-0000"
+                                                    {...register('phone', { required: 'Phone is required' })}
+                                                    error={errors.phone?.message as string}
+                                                />
+                                                <div className="md:col-span-2">
+                                                    <Input
+                                                        label="Address Line 1"
+                                                        placeholder="Street address"
+                                                        {...register('address_line_1', { required: 'Address is required' })}
+                                                        error={errors.address_line_1?.message as string}
+                                                    />
+                                                </div>
+                                                <div className="md:col-span-2">
+                                                    <Input
+                                                        label="Address Line 2 (Optional)"
+                                                        placeholder="Apartment, suite, etc."
+                                                        {...register('address_line_2')}
+                                                    />
+                                                </div>
+                                                <Input
+                                                    label="City"
+                                                    placeholder="City"
+                                                    {...register('city', { required: 'City is required' })}
+                                                    error={errors.city?.message as string}
+                                                />
+                                                <Input
+                                                    label="State"
+                                                    placeholder="State"
+                                                    {...register('state', { required: 'State is required' })}
+                                                    error={errors.state?.message as string}
+                                                />
+                                                <Input
+                                                    label="Postal Code"
+                                                    placeholder="12345"
+                                                    {...register('postal_code', { required: 'Postal code is required' })}
+                                                    error={errors.postal_code?.message as string}
+                                                />
+                                                <Input
+                                                    label="Country"
+                                                    placeholder="United States"
+                                                    defaultValue="United States"
+                                                    {...register('country', { required: 'Country is required' })}
+                                                    error={errors.country?.message as string}
+                                                />
+                                                <div className="md:col-span-2">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input type="checkbox" {...register('save_address')} className="rounded" />
+                                                        <span className="text-sm text-neutral-600">Save this address for future orders</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="mt-8 flex justify-end">
+                                            <Button onClick={nextStep}>
+                                                Continue to Shipping
+                                                <ChevronRight className="w-5 h-5 ml-2" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Shipping Step */}
+                                {currentStep === 'shipping' && (
+                                    <div className="bg-white rounded-xl p-6 shadow-card">
+                                        <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Method</h2>
+
+                                        <div className="space-y-4">
+                                            {shippingOptions.map((option) => (
+                                                <label
+                                                    key={option.id}
+                                                    className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition-colors ${shippingMethod === option.id
+                                                        ? 'border-primary-500 bg-primary-50'
+                                                        : 'border-neutral-200 hover:border-neutral-300'
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <input
+                                                            type="radio"
+                                                            name="shipping"
+                                                            checked={shippingMethod === option.id}
+                                                            onChange={() => setShippingMethod(option.id)}
+                                                        />
+                                                        <div>
+                                                            <p className="font-medium">{option.name}</p>
+                                                            <p className="text-sm text-neutral-600">{option.days}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="font-bold">
+                                                        {option.price === 0 ? 'FREE' : `$${option.price.toFixed(2)}`}
+                                                    </span>
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        <div className="mt-8 flex justify-between">
+                                            <Button variant="ghost" onClick={prevStep}>
+                                                Back
+                                            </Button>
+                                            <Button onClick={nextStep}>
+                                                Continue to Payment
+                                                <ChevronRight className="w-5 h-5 ml-2" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Payment Step */}
+                                {currentStep === 'payment' && (
+                                    <div className="bg-white rounded-xl p-6 shadow-card">
+                                        <h2 className="text-xl font-bold text-primary-900 mb-6">Payment Method</h2>
+
+                                        <div className="space-y-4 mb-6">
+                                            {[
+                                                { id: 'card', name: 'Credit/Debit Card', icon: '💳' },
+                                                { id: 'paypal', name: 'PayPal', icon: '🅿️' },
+                                                { id: 'cod', name: 'Cash on Delivery', icon: '💵' },
+                                            ].map((method) => (
+                                                <label
+                                                    key={method.id}
+                                                    className={`flex items-center gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${paymentMethod === method.id
+                                                        ? 'border-primary-500 bg-primary-50'
+                                                        : 'border-neutral-200 hover:border-neutral-300'
                                                         }`}
                                                 >
                                                     <input

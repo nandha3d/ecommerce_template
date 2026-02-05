@@ -114,6 +114,7 @@ return [
          */
         App\Providers\AppServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
+        Core\System\SystemServiceProvider::class,
     ],
 
     /*

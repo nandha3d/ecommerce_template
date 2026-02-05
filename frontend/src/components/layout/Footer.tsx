@@ -13,9 +13,11 @@ import {
     Shield,
     Headphones
 } from 'lucide-react';
+import { useConfig } from '../../core/config/ConfigContext';
 
 const Footer: React.FC = () => {
     const currentYear = new Date().getFullYear();
+    const { config } = useConfig();
 
     return (
         <footer className="bg-primary-900 text-white">
@@ -29,7 +31,7 @@ const Footer: React.FC = () => {
                             </div>
                             <div>
                                 <h4 className="font-semibold">Free Shipping</h4>
-                                <p className="text-sm text-neutral-400">On orders over $50</p>
+                                <p className="text-sm text-white/60">On orders over $50</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -38,7 +40,7 @@ const Footer: React.FC = () => {
                             </div>
                             <div>
                                 <h4 className="font-semibold">Secure Payments</h4>
-                                <p className="text-sm text-neutral-400">100% secure checkout</p>
+                                <p className="text-sm text-white/60">100% secure checkout</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -47,7 +49,7 @@ const Footer: React.FC = () => {
                             </div>
                             <div>
                                 <h4 className="font-semibold">Money Back</h4>
-                                <p className="text-sm text-neutral-400">30-day guarantee</p>
+                                <p className="text-sm text-white/60">30-day guarantee</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-4">
@@ -56,7 +58,7 @@ const Footer: React.FC = () => {
                             </div>
                             <div>
                                 <h4 className="font-semibold">24/7 Support</h4>
-                                <p className="text-sm text-neutral-400">Dedicated help center</p>
+                                <p className="text-sm text-white/60">Dedicated help center</p>
                             </div>
                         </div>
                     </div>
@@ -70,12 +72,12 @@ const Footer: React.FC = () => {
                     <div>
                         <div className="flex items-center gap-2 mb-6">
                             <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-xl">S</span>
+                                <span className="text-white font-bold text-xl">{config['site.name'].charAt(0)}</span>
                             </div>
-                            <span className="text-xl font-display font-bold">SupplePro</span>
+                            <span className="text-xl font-display font-bold">{config['site.name']}</span>
                         </div>
-                        <p className="text-neutral-400 mb-6 leading-relaxed">
-                            Your trusted source for premium supplements. We're committed to helping you achieve your health and fitness goals with quality products.
+                        <p className="text-white/60 mb-6 leading-relaxed">
+                            {config['site.description']}
                         </p>
                         <div className="flex gap-3">
                             <a href="#" className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center hover:bg-primary-500 transition-colors">
@@ -98,32 +100,32 @@ const Footer: React.FC = () => {
                         <h3 className="font-display font-bold text-lg mb-6">Quick Links</h3>
                         <ul className="space-y-3">
                             <li>
-                                <Link to="/products" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/products" className="text-white/60 hover:text-primary-500 transition-colors">
                                     All Products
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/products?featured=true" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/products?featured=true" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Best Sellers
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/products?new=true" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/products?new=true" className="text-white/60 hover:text-primary-500 transition-colors">
                                     New Arrivals
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/products?sale=true" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/products?sale=true" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Special Offers
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/pages/about" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/pages/about" className="text-white/60 hover:text-primary-500 transition-colors">
                                     About Us
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/pages/contact" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/pages/contact" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Contact
                                 </Link>
                             </li>
@@ -135,32 +137,32 @@ const Footer: React.FC = () => {
                         <h3 className="font-display font-bold text-lg mb-6">Customer Service</h3>
                         <ul className="space-y-3">
                             <li>
-                                <Link to="/account" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/account" className="text-white/60 hover:text-primary-500 transition-colors">
                                     My Account
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/account/orders" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/account/orders" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Track Order
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/pages/shipping" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/pages/shipping" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Shipping Info
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/pages/returns" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/pages/returns" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Returns & Refunds
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/pages/faq" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/pages/faq" className="text-white/60 hover:text-primary-500 transition-colors">
                                     FAQ
                                 </Link>
                             </li>
                             <li>
-                                <Link to="/pages/privacy" className="text-neutral-400 hover:text-primary-500 transition-colors">
+                                <Link to="/pages/privacy" className="text-white/60 hover:text-primary-500 transition-colors">
                                     Privacy Policy
                                 </Link>
                             </li>
@@ -173,21 +175,20 @@ const Footer: React.FC = () => {
                         <ul className="space-y-4">
                             <li className="flex items-start gap-3">
                                 <MapPin className="w-5 h-5 text-primary-500 mt-0.5 flex-shrink-0" />
-                                <span className="text-neutral-400">
-                                    123 Supplement Street<br />
-                                    Health City, HC 12345
+                                <span className="text-white/60">
+                                    {config['contact.address']}
                                 </span>
                             </li>
                             <li className="flex items-center gap-3">
                                 <Phone className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                                <a href="tel:+18005877536" className="text-neutral-400 hover:text-primary-500 transition-colors">
-                                    1-800-SUPPLEMENTS
+                                <a href={`tel:${config['contact.phone']}`} className="text-white/60 hover:text-primary-500 transition-colors">
+                                    {config['contact.phone']}
                                 </a>
                             </li>
                             <li className="flex items-center gap-3">
                                 <Mail className="w-5 h-5 text-primary-500 flex-shrink-0" />
-                                <a href="mailto:support@supplepro.com" className="text-neutral-400 hover:text-primary-500 transition-colors">
-                                    support@supplepro.com
+                                <a href={`mailto:${config['contact.email']}`} className="text-white/60 hover:text-primary-500 transition-colors">
+                                    {config['contact.email']}
                                 </a>
                             </li>
                         </ul>
@@ -199,7 +200,7 @@ const Footer: React.FC = () => {
                                 <input
                                     type="email"
                                     placeholder="Your email"
-                                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                    className="flex-1 px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-primary-500"
                                 />
                                 <button type="submit" className="px-4 py-2 bg-primary-500 rounded-lg font-medium hover:bg-primary-700 transition-colors">
                                     Subscribe
@@ -214,17 +215,17 @@ const Footer: React.FC = () => {
             <div className="border-t border-white/10">
                 <div className="container mx-auto px-4 py-6">
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                        <p className="text-neutral-400 text-sm text-center md:text-left">
-                            © {currentYear} SupplePro. All rights reserved.
+                        <p className="text-white/60 text-sm text-center md:text-left">
+                            © {currentYear} {config['site.name']}. All rights reserved.
                         </p>
                         <div className="flex items-center gap-6">
-                            <Link to="/pages/terms" className="text-sm text-neutral-400 hover:text-primary-500 transition-colors">
+                            <Link to="/pages/terms" className="text-sm text-white/60 hover:text-white transition-colors">
                                 Terms of Service
                             </Link>
-                            <Link to="/pages/privacy" className="text-sm text-neutral-400 hover:text-primary-500 transition-colors">
+                            <Link to="/pages/privacy" className="text-sm text-white/60 hover:text-white transition-colors">
                                 Privacy Policy
                             </Link>
-                            <Link to="/pages/cookies" className="text-sm text-neutral-400 hover:text-primary-500 transition-colors">
+                            <Link to="/pages/cookies" className="text-sm text-white/60 hover:text-white transition-colors">
                                 Cookie Policy
                             </Link>
                         </div>

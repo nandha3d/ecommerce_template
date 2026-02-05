@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
+use Core\Product\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ProductAttribute;
 use Illuminate\Http\Request;

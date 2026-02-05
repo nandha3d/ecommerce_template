@@ -4,7 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\Brand;
 use App\Models\Category;
-use App\Models\Product;
+use Core\Product\Models\Product;
+use App\Models\ProductAttribute;
+use App\Models\ProductAttributeOption;
 use App\Models\ProductAddon;
 use App\Models\ProductBundle;
 use App\Models\ProductBundleItem;
@@ -18,6 +20,81 @@ class ProductSeeder extends Seeder
 {
     public function run(): void
     {
+        // ========================================
+        // 1. SYNC GLOBAL ATTRIBUTES
+        // ========================================
+        
+        // Size Attribute
+        $sizeAttr = ProductAttribute::firstOrCreate(
+            ['slug' => 'size'],
+            [
+                'name' => 'Size',
+                'type' => 'text',
+                'is_active' => true,
+                'show_price_diff' => true,
+                'sort_order' => 1,
+            ]
+        );
+
+        $sizeOptions = ['1 lb', '2 lb', '5 lb', 'S', 'M', 'L', 'XL', '180 Tabs', '90 Caps'];
+        foreach ($sizeOptions as $idx => $val) {
+            ProductAttributeOption::firstOrCreate(
+                ['attribute_id' => $sizeAttr->id, 'value' => $val],
+                ['label' => $val, 'sort_order' => $idx + 1]
+            );
+        }
+
+        // Flavor Attribute
+        $flavorAttr = ProductAttribute::firstOrCreate(
+            ['slug' => 'flavor'],
+            [
+                'name' => 'Flavor',
+                'type' => 'text', // Using text/button for flavor now
+                'is_active' => true,
+                'show_price_diff' => false,
+                'sort_order' => 2,
+            ]
+        );
+
+        $flavorOptions = [
+            'Double Rich Chocolate', 'Vanilla Ice Cream', 'Strawberry', 
+            'Blue Raspberry', 'Fruit Punch', 'Watermelon', 'Green Apple', 'Unflavored'
+        ];
+        foreach ($flavorOptions as $idx => $val) {
+            ProductAttributeOption::firstOrCreate(
+                ['attribute_id' => $flavorAttr->id, 'value' => $val],
+                ['label' => $val, 'sort_order' => $idx + 1]
+            );
+        }
+
+        // Color Attribute (example for apparel)
+        $colorAttr = ProductAttribute::firstOrCreate(
+            ['slug' => 'color'],
+            [
+                'name' => 'Color',
+                'type' => 'color',
+                'is_active' => true,
+                'show_price_diff' => false,
+                'sort_order' => 3,
+            ]
+        );
+
+        $colors = [
+            ['Red', '#ef4444'], 
+            ['Blue', '#3b82f6'], 
+            ['Black', '#000000'], 
+            ['White', '#ffffff'],
+            ['Green', '#22c55e']
+        ];
+        foreach ($colors as $idx => $c) {
+            ProductAttributeOption::firstOrCreate(
+                ['attribute_id' => $colorAttr->id, 'value' => $c[0]],
+                ['label' => $c[0], 'color_code' => $c[1], 'sort_order' => $idx + 1]
+            );
+        }
+
+        $this->command->info('✅ Synced Global Attributes (Size, Flavor, Color)');
+
         // Create Categories
         $supplements = Category::firstOrCreate(
             ['slug' => 'supplements'],
@@ -51,6 +128,30 @@ class ProductSeeder extends Seeder
                 'image' => 'https://images.unsplash.com/photo-1558611848-73f7eb4001a1?w=400',
                 'is_active' => true,
                 'sort_order' => 2,
+            ]
+        );
+
+        $vitamins = Category::firstOrCreate(
+            ['slug' => 'vitamins-minerals'],
+            [
+                'name' => 'Vitamins & Minerals',
+                'description' => 'Essential nutrients for overall health',
+                'parent_id' => $supplements->id,
+                'image' => 'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=400',
+                'is_active' => true,
+                'sort_order' => 3,
+            ]
+        );
+
+        $weightLoss = Category::firstOrCreate(
+            ['slug' => 'weight-loss'],
+            [
+                'name' => 'Weight Loss',
+                'description' => 'Support your weight management goals',
+                'parent_id' => $supplements->id,
+                'image' => 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400',
+                'is_active' => true,
+                'sort_order' => 4,
             ]
         );
 
@@ -255,6 +356,121 @@ class ProductSeeder extends Seeder
         if (method_exists($offer, 'products')) {
             $offer->products()->syncWithoutDetaching([$wheyProduct->id]);
         }
+
+        // ========================================
+        // PRODUCT 3: Multivitamin
+        // ========================================
+        $multivitamin = Product::firstOrCreate(
+            ['slug' => 'daily-multivitamin'],
+            [
+                'name' => 'Opti-Men Multivitamin',
+                'sku' => 'ON-OPTI-MEN-001',
+                'description' => 'Comprehensive nutrient optimization system for active men.',
+                'short_description' => '75+ Active Ingredients',
+                'price' => 29.99,
+                'brand_id' => $optimumNutrition->id,
+                'stock_quantity' => 100,
+                'is_active' => true,
+                'is_featured' => true,
+                'seo_title' => 'Opti-Men Multivitamin',
+            ]
+        );
+
+        if (method_exists($multivitamin, 'categories')) {
+            $multivitamin->categories()->syncWithoutDetaching([$vitamins->id]);
+        }
+
+        ProductImage::firstOrCreate(
+            ['product_id' => $multivitamin->id, 'sort_order' => 0],
+            ['url' => 'https://images.unsplash.com/photo-1550572017-4fcd95616d73?w=800', 'is_primary' => true]
+        );
+
+        // ========================================
+        // PRODUCT 4: Fish Oil
+        // ========================================
+        $fishOil = Product::firstOrCreate(
+            ['slug' => 'omega-3-fish-oil'],
+            [
+                'name' => 'Platinum 100% Fish Oil',
+                'sku' => 'MT-FISHOIL-001',
+                'description' => 'Ultra-pure omega-3 fatty acids for heart and joint health.',
+                'short_description' => '300mg Omega-3s per serving',
+                'price' => 19.99,
+                'brand_id' => $musclePharm->id,
+                'stock_quantity' => 200,
+                'is_active' => true,
+                'is_bestseller' => true,
+                'seo_title' => 'Platinum Fish Oil',
+            ]
+        );
+
+        if (method_exists($fishOil, 'categories')) {
+            $fishOil->categories()->syncWithoutDetaching([$vitamins->id]);
+        }
+
+        ProductImage::firstOrCreate(
+            ['product_id' => $fishOil->id, 'sort_order' => 0],
+            ['url' => 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800', 'is_primary' => true]
+        );
+
+        // ========================================
+        // PRODUCT 5: Fat Burner
+        // ========================================
+        $fatBurner = Product::firstOrCreate(
+            ['slug' => 'shred-fat-burner'],
+            [
+                'name' => 'Hyper Shred Fat Burner',
+                'sku' => 'BSN-SHRED-001',
+                'description' => 'Thermodynamic metabolic activator for weight management.',
+                'short_description' => 'Energy, Focus, Weight Management',
+                'price' => 44.99,
+                'sale_price' => 39.99,
+                'brand_id' => $optimumNutrition->id,
+                'stock_quantity' => 60,
+                'is_active' => true,
+                'is_new' => true,
+                'seo_title' => 'Hyper Shred Fat Burner',
+            ]
+        );
+
+        if (method_exists($fatBurner, 'categories')) {
+            $fatBurner->categories()->syncWithoutDetaching([$weightLoss->id]);
+        }
+
+        ProductImage::firstOrCreate(
+            ['product_id' => $fatBurner->id, 'sort_order' => 0],
+            ['url' => 'https://images.unsplash.com/photo-1576091160550-21733e6373db?w=800', 'is_primary' => true]
+        );
+
+        // ========================================
+        // PRODUCT 6: Creatine
+        // ========================================
+        $creatine = Product::firstOrCreate(
+            ['slug' => 'micronized-creatine'],
+            [
+                'name' => 'Micronized Creatine Powder',
+                'sku' => 'ON-CREATINE-001',
+                'description' => 'Pure creatine monohydrate for muscle strength and power.',
+                'short_description' => '5g Creatine Monohydrate per serving',
+                'price' => 24.99,
+                'brand_id' => $optimumNutrition->id,
+                'stock_quantity' => 300,
+                'is_active' => true,
+                'is_bestseller' => true,
+                'seo_title' => 'Micronized Creatine',
+            ]
+        );
+
+        if (method_exists($creatine, 'categories')) {
+            $creatine->categories()->syncWithoutDetaching([$supplements->id]);
+        }
+
+        ProductImage::firstOrCreate(
+            ['product_id' => $creatine->id, 'sort_order' => 0],
+            ['url' => 'https://images.unsplash.com/photo-1593095948071-474c5cc2989d?w=800', 'is_primary' => true]
+        );
+
+        $this->command->info('✅ Created additional sample products (Vitamins, Fish Oil, Fat Burner, Creatine)!');
 
         $this->command->info('✅ Created 2 products with variants, addons, bundle, and price offer!');
     }

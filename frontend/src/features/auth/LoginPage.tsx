@@ -8,10 +8,12 @@ import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import { login } from '../../store/slices/authSlice';
 import { Button, Input } from '../../components/ui';
 import toast from 'react-hot-toast';
+import { useConfig } from '../../core/config/ConfigContext';
 
 const loginSchema = z.object({
     email: z.string().email('Please enter a valid email'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
+    remember: z.boolean().optional(),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -24,6 +26,7 @@ const LoginPage: React.FC = () => {
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { isLoading, error } = useAppSelector((state) => state.auth);
+    const { config } = useConfig();
 
     const {
         register,
@@ -51,9 +54,9 @@ const LoginPage: React.FC = () => {
                     <div className="text-center mb-8">
                         <Link to="/" className="inline-flex items-center gap-2 mb-6">
                             <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-xl">S</span>
+                                <span className="text-white font-bold text-xl">{config['site.name'].charAt(0)}</span>
                             </div>
-                            <span className="text-xl font-display font-bold text-primary-900">SupplePro</span>
+                            <span className="text-xl font-display font-bold text-primary-900">{config['site.name']}</span>
                         </Link>
                         <h1 className="text-3xl font-display font-bold text-primary-900 mb-2">
                             Welcome Back
@@ -99,7 +102,11 @@ const LoginPage: React.FC = () => {
 
                         <div className="flex items-center justify-between">
                             <label className="flex items-center gap-2 cursor-pointer">
-                                <input type="checkbox" className="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500" />
+                                <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-neutral-300 text-primary-500 focus:ring-primary-500"
+                                    {...register('remember')}
+                                />
                                 <span className="text-sm text-neutral-600">Remember me</span>
                             </label>
                             <Link to="/auth/forgot-password" className="text-sm text-primary-500 hover:underline">

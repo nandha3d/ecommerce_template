@@ -53,18 +53,18 @@ export const productService = {
 
     // Categories
     async getCategories(): Promise<Category[]> {
-        const response = await api.get<ApiResponse<Category[]>>('/categories');
+        const response = await api.get<ApiResponse<Category[]>>('/products/categories');
         return response.data.data;
     },
 
     async getCategory(slug: string): Promise<Category> {
-        const response = await api.get<ApiResponse<Category>>(`/categories/${slug}`);
+        const response = await api.get<ApiResponse<Category>>(`/products/categories/${slug}`);
         return response.data.data;
     },
 
     // Brands
     async getBrands(): Promise<Brand[]> {
-        const response = await api.get<ApiResponse<Brand[]>>('/brands');
+        const response = await api.get<ApiResponse<Brand[]>>('/products/brands');
         return response.data.data;
     },
 };

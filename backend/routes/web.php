@@ -14,14 +14,29 @@ use App\Http\Controllers\MetaController;
 |
 */
 
-// Home Page
-Route::get('/', [MetaController::class, 'home']);
+// Home Page - API Status
+Route::get('/', function () {
+    return response()->json([
+        'status' => 'online',
+        'message' => 'Backend API is running. Please access the storefront at: ' . env('FRONTEND_URL', 'http://localhost:5173'),
+        'service' => 'Supplement Ecommerce API'
+    ]);
+})->name('home');
 
-// Product Page
-Route::get('/product/{slug}', [MetaController::class, 'product']);
+// Products (API only, redirect UI requests to Frontend)
+Route::redirect('/products', env('FRONTEND_URL', 'http://localhost:5173') . '/shop');
 
-// Sitemap
+// Sitemap & Robots
 Route::get('/sitemap.xml', [App\Http\Controllers\SitemapController::class, 'index']);
+Route::get('/robots.txt', [App\Http\Controllers\SitemapController::class, 'robots']);
 
-// Fallback for all other React routes
-Route::fallback([MetaController::class, 'default']);
+// Health Check
+Route::get('/health', [App\Http\Controllers\HealthController::class, 'ping']);
+Route::get('/health/status', [App\Http\Controllers\HealthController::class, 'status']);
+
+// Cart - Redirect to Frontend
+Route::redirect('/cart', env('FRONTEND_URL', 'http://localhost:5173') . '/cart');
+Route::redirect('/wishlist', env('FRONTEND_URL', 'http://localhost:5173') . '/wishlist');
+
+// Admin Panel
+Route::get('/admin/{any?}', [MetaController::class, 'default'])->where('any', '.*');
