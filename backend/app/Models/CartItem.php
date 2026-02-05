@@ -14,11 +14,11 @@ class CartItem extends Model
         'product_id',
         'variant_id',
         'quantity',
-        'price',
+        'unit_price',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'unit_price' => 'decimal:2',
         'quantity' => 'integer',
     ];
 
@@ -43,6 +43,22 @@ class CartItem extends Model
      */
     public function getSubtotalAttribute()
     {
-        return $this->price * $this->quantity;
+        return $this->unit_price * $this->quantity;
+    }
+
+    /**
+     * Get total price (alias for subtotal).
+     */
+    public function getTotalPriceAttribute()
+    {
+        return $this->subtotal;
+    }
+
+    /**
+     * Get the variant for this cart item.
+     */
+    public function variant()
+    {
+        return $this->belongsTo(\App\Models\ProductVariant::class);
     }
 }

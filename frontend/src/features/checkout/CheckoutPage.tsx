@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import {
@@ -14,46 +14,29 @@ import { useStoreLayoutSettings } from '../../storeLayout/StoreLayoutProvider';
 import { orderService } from '../../services';
 import { Button, Input, Loader } from '../../components/ui';
 import { SEO } from '../../components/common/SEO';
-import { Address } from '../../types';
 import toast from 'react-hot-toast';
+import { getImageUrl } from '../../utils/imageUtils';
+import { AddressList } from '../user/components/AddressList';
+import { Address } from '../../types';
 
 type CheckoutStep = 'address' | 'shipping' | 'payment' | 'review';
 
 const CheckoutPage: React.FC = () => {
     const navigate = useNavigate();
     const { cart, isLoading: cartLoading } = useAppSelector((state) => state.cart);
-    const { user } = useAppSelector((state) => state.auth);
     const { settings } = useStoreLayoutSettings();
     const layoutVariant = settings.checkout;
 
     const [currentStep, setCurrentStep] = useState<CheckoutStep>('address');
-    const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
-    const [selectedAddress, setSelectedAddress] = useState<number | null>(null);
+
+    // Checkout State
+    const [selectedAddressObj, setSelectedAddressObj] = useState<Address | null>(null);
     const [shippingMethod, setShippingMethod] = useState('standard');
     const [paymentMethod, setPaymentMethod] = useState('card');
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [useNewAddress, setUseNewAddress] = useState(false);
 
-    const { register, handleSubmit, formState: { errors } } = useForm();
-
-    useEffect(() => {
-        loadAddresses();
-    }, []);
-
-    const loadAddresses = async () => {
-        try {
-            const addresses = await orderService.getAddresses();
-            setSavedAddresses(addresses);
-            if (addresses.length > 0) {
-                const defaultAddr = addresses.find(a => a.is_default) || addresses[0];
-                setSelectedAddress(defaultAddr.id);
-            } else {
-                setUseNewAddress(true);
-            }
-        } catch (error) {
-            setUseNewAddress(true);
-        }
-    };
+    // We no longer need the manual address form here as AddressList handles it
+    const { handleSubmit } = useForm();
 
     const steps: { id: CheckoutStep; label: string; icon: React.ReactNode }[] = [
         { id: 'address', label: 'Address', icon: <MapPin className="w-5 h-5" /> },
@@ -80,24 +63,18 @@ const CheckoutPage: React.FC = () => {
         { id: 'overnight', name: 'Overnight Shipping', price: 19.99, days: 'Next business day' },
     ];
 
-    const handlePlaceOrder = async (data: any) => {
+    const handlePlaceOrder = async () => {
         setIsSubmitting(true);
         try {
+            if (!selectedAddressObj) {
+                toast.error('Please select a shipping address');
+                setIsSubmitting(false);
+                return;
+            }
+
             const orderData = {
-                billing_address_id: selectedAddress || undefined,
-                shipping_address_id: selectedAddress || undefined,
-                billing_address: useNewAddress ? {
-                    type: 'billing' as const,
-                    name: data.name,
-                    phone: data.phone,
-                    address_line_1: data.address_line_1,
-                    address_line_2: data.address_line_2,
-                    city: data.city,
-                    state: data.state,
-                    postal_code: data.postal_code,
-                    country: data.country,
-                    is_default: data.save_address || false,
-                } : undefined,
+                billing_address_id: selectedAddressObj.id,
+                shipping_address_id: selectedAddressObj.id,
                 payment_method: paymentMethod,
                 same_as_billing: true,
             };
@@ -147,7 +124,7 @@ const CheckoutPage: React.FC = () => {
                     {cart.items.map((item) => (
                         <div key={item.id} className="flex gap-3">
                             <img
-                                src={item.product.images[0]?.url || '/placeholder.jpg'}
+                                src={getImageUrl(item.product.images[0]?.url)}
                                 alt={item.product.name}
                                 className="w-12 h-12 object-cover rounded"
                             />
@@ -194,6 +171,27 @@ const CheckoutPage: React.FC = () => {
         </div>
     );
 
+    const addressStep = (
+        <div className="bg-white rounded-xl p-6 shadow-card">
+            <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Address</h2>
+            <AddressList
+                selectable
+                selectedId={selectedAddressObj?.id}
+                onSelect={setSelectedAddressObj}
+            />
+
+            <div className="mt-8 flex justify-end">
+                <Button
+                    onClick={nextStep}
+                    disabled={!selectedAddressObj}
+                >
+                    Continue to Shipping
+                    <ChevronRight className="w-5 h-5 ml-2" />
+                </Button>
+            </div>
+        </div>
+    );
+
     return (
         <div className="min-h-screen bg-neutral-50 py-8">
             <SEO title="Checkout" description="Complete your purchase securely" noindex />
@@ -235,125 +233,7 @@ const CheckoutPage: React.FC = () => {
                         {summaryFirst && orderSummary}
                         <div>
                             <form onSubmit={handleSubmit(handlePlaceOrder)}>
-                                {/* Address Step */}
-                                {currentStep === 'address' && (
-                                    <div className="bg-white rounded-xl p-6 shadow-card">
-                                        <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Address</h2>
-
-                                        {savedAddresses.length > 0 && (
-                                            <div className="space-y-4 mb-6">
-                                                {savedAddresses.map((addr) => (
-                                                    <label
-                                                        key={addr.id}
-                                                        className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedAddress === addr.id && !useNewAddress
-                                                            ? 'border-primary-500 bg-primary-50'
-                                                            : 'border-neutral-200 hover:border-neutral-300'
-                                                            }`}
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            name="address"
-                                                            checked={selectedAddress === addr.id && !useNewAddress}
-                                                            onChange={() => {
-                                                                setSelectedAddress(addr.id);
-                                                                setUseNewAddress(false);
-                                                            }}
-                                                            className="mt-1"
-                                                        />
-                                                        <div>
-                                                            <p className="font-medium">{addr.name}</p>
-                                                            <p className="text-sm text-neutral-600">
-                                                                {addr.address_line_1}
-                                                                {addr.address_line_2 && `, ${addr.address_line_2}`}
-                                                            </p>
-                                                            <p className="text-sm text-neutral-600">
-                                                                {addr.city}, {addr.state} {addr.postal_code}
-                                                            </p>
-                                                            <p className="text-sm text-neutral-600">{addr.phone}</p>
-                                                        </div>
-                                                    </label>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setUseNewAddress(!useNewAddress)}
-                                                    className="text-primary-500 font-medium hover:underline"
-                                                >
-                                                    {useNewAddress ? 'Use saved address' : '+ Add new address'}
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {useNewAddress && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <Input
-                                                    label="Full Name"
-                                                    placeholder="John Doe"
-                                                    {...register('name', { required: 'Name is required' })}
-                                                    error={errors.name?.message as string}
-                                                />
-                                                <Input
-                                                    label="Phone Number"
-                                                    placeholder="+1 (555) 000-0000"
-                                                    {...register('phone', { required: 'Phone is required' })}
-                                                    error={errors.phone?.message as string}
-                                                />
-                                                <div className="md:col-span-2">
-                                                    <Input
-                                                        label="Address Line 1"
-                                                        placeholder="Street address"
-                                                        {...register('address_line_1', { required: 'Address is required' })}
-                                                        error={errors.address_line_1?.message as string}
-                                                    />
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <Input
-                                                        label="Address Line 2 (Optional)"
-                                                        placeholder="Apartment, suite, etc."
-                                                        {...register('address_line_2')}
-                                                    />
-                                                </div>
-                                                <Input
-                                                    label="City"
-                                                    placeholder="City"
-                                                    {...register('city', { required: 'City is required' })}
-                                                    error={errors.city?.message as string}
-                                                />
-                                                <Input
-                                                    label="State"
-                                                    placeholder="State"
-                                                    {...register('state', { required: 'State is required' })}
-                                                    error={errors.state?.message as string}
-                                                />
-                                                <Input
-                                                    label="Postal Code"
-                                                    placeholder="12345"
-                                                    {...register('postal_code', { required: 'Postal code is required' })}
-                                                    error={errors.postal_code?.message as string}
-                                                />
-                                                <Input
-                                                    label="Country"
-                                                    placeholder="United States"
-                                                    defaultValue="United States"
-                                                    {...register('country', { required: 'Country is required' })}
-                                                    error={errors.country?.message as string}
-                                                />
-                                                <div className="md:col-span-2">
-                                                    <label className="flex items-center gap-2 cursor-pointer">
-                                                        <input type="checkbox" {...register('save_address')} className="rounded" />
-                                                        <span className="text-sm text-neutral-600">Save this address for future orders</span>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="mt-8 flex justify-end">
-                                            <Button onClick={nextStep}>
-                                                Continue to Shipping
-                                                <ChevronRight className="w-5 h-5 ml-2" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
+                                {currentStep === 'address' && addressStep}
 
                                 {/* Shipping Step */}
                                 {currentStep === 'shipping' && (
@@ -466,7 +346,7 @@ const CheckoutPage: React.FC = () => {
                                                     {cart.items.map((item) => (
                                                         <div key={item.id} className="flex items-center gap-4">
                                                             <img
-                                                                src={item.product.images[0]?.url || '/placeholder.jpg'}
+                                                                src={getImageUrl(item.product.images[0]?.url)}
                                                                 alt={item.product.name}
                                                                 className="w-16 h-16 object-cover rounded-lg"
                                                             />
@@ -508,125 +388,7 @@ const CheckoutPage: React.FC = () => {
                         {/* Main Content */}
                         <div className={mainColClass}>
                             <form onSubmit={handleSubmit(handlePlaceOrder)}>
-                                {/* Address Step */}
-                                {currentStep === 'address' && (
-                                    <div className="bg-white rounded-xl p-6 shadow-card">
-                                        <h2 className="text-xl font-bold text-primary-900 mb-6">Shipping Address</h2>
-
-                                        {savedAddresses.length > 0 && (
-                                            <div className="space-y-4 mb-6">
-                                                {savedAddresses.map((addr) => (
-                                                    <label
-                                                        key={addr.id}
-                                                        className={`flex items-start gap-4 p-4 border-2 rounded-lg cursor-pointer transition-colors ${selectedAddress === addr.id && !useNewAddress
-                                                            ? 'border-primary-500 bg-primary-50'
-                                                            : 'border-neutral-200 hover:border-neutral-300'
-                                                            }`}
-                                                    >
-                                                        <input
-                                                            type="radio"
-                                                            name="address"
-                                                            checked={selectedAddress === addr.id && !useNewAddress}
-                                                            onChange={() => {
-                                                                setSelectedAddress(addr.id);
-                                                                setUseNewAddress(false);
-                                                            }}
-                                                            className="mt-1"
-                                                        />
-                                                        <div>
-                                                            <p className="font-medium">{addr.name}</p>
-                                                            <p className="text-sm text-neutral-600">
-                                                                {addr.address_line_1}
-                                                                {addr.address_line_2 && `, ${addr.address_line_2}`}
-                                                            </p>
-                                                            <p className="text-sm text-neutral-600">
-                                                                {addr.city}, {addr.state} {addr.postal_code}
-                                                            </p>
-                                                            <p className="text-sm text-neutral-600">{addr.phone}</p>
-                                                        </div>
-                                                    </label>
-                                                ))}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setUseNewAddress(!useNewAddress)}
-                                                    className="text-primary-500 font-medium hover:underline"
-                                                >
-                                                    {useNewAddress ? 'Use saved address' : '+ Add new address'}
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {useNewAddress && (
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <Input
-                                                    label="Full Name"
-                                                    placeholder="John Doe"
-                                                    {...register('name', { required: 'Name is required' })}
-                                                    error={errors.name?.message as string}
-                                                />
-                                                <Input
-                                                    label="Phone Number"
-                                                    placeholder="+1 (555) 000-0000"
-                                                    {...register('phone', { required: 'Phone is required' })}
-                                                    error={errors.phone?.message as string}
-                                                />
-                                                <div className="md:col-span-2">
-                                                    <Input
-                                                        label="Address Line 1"
-                                                        placeholder="Street address"
-                                                        {...register('address_line_1', { required: 'Address is required' })}
-                                                        error={errors.address_line_1?.message as string}
-                                                    />
-                                                </div>
-                                                <div className="md:col-span-2">
-                                                    <Input
-                                                        label="Address Line 2 (Optional)"
-                                                        placeholder="Apartment, suite, etc."
-                                                        {...register('address_line_2')}
-                                                    />
-                                                </div>
-                                                <Input
-                                                    label="City"
-                                                    placeholder="City"
-                                                    {...register('city', { required: 'City is required' })}
-                                                    error={errors.city?.message as string}
-                                                />
-                                                <Input
-                                                    label="State"
-                                                    placeholder="State"
-                                                    {...register('state', { required: 'State is required' })}
-                                                    error={errors.state?.message as string}
-                                                />
-                                                <Input
-                                                    label="Postal Code"
-                                                    placeholder="12345"
-                                                    {...register('postal_code', { required: 'Postal code is required' })}
-                                                    error={errors.postal_code?.message as string}
-                                                />
-                                                <Input
-                                                    label="Country"
-                                                    placeholder="United States"
-                                                    defaultValue="United States"
-                                                    {...register('country', { required: 'Country is required' })}
-                                                    error={errors.country?.message as string}
-                                                />
-                                                <div className="md:col-span-2">
-                                                    <label className="flex items-center gap-2 cursor-pointer">
-                                                        <input type="checkbox" {...register('save_address')} className="rounded" />
-                                                        <span className="text-sm text-neutral-600">Save this address for future orders</span>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="mt-8 flex justify-end">
-                                            <Button onClick={nextStep}>
-                                                Continue to Shipping
-                                                <ChevronRight className="w-5 h-5 ml-2" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
+                                {currentStep === 'address' && addressStep}
 
                                 {/* Shipping Step */}
                                 {currentStep === 'shipping' && (
@@ -739,7 +501,7 @@ const CheckoutPage: React.FC = () => {
                                                     {cart.items.map((item) => (
                                                         <div key={item.id} className="flex items-center gap-4">
                                                             <img
-                                                                src={item.product.images[0]?.url || '/placeholder.jpg'}
+                                                                src={getImageUrl(item.product.images[0]?.url)}
                                                                 alt={item.product.name}
                                                                 className="w-16 h-16 object-cover rounded-lg"
                                                             />

@@ -34,7 +34,7 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'slug' => 'nullable|string|max:255|unique:categories',
             'description' => 'nullable|string',
-            'image' => 'nullable|string',
+            'image' => 'nullable|image|max:2048', // Allow image upload
             'parent_id' => 'nullable|exists:categories,id',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
@@ -42,6 +42,11 @@ class CategoryController extends Controller
 
         if (empty($validated['slug'])) {
             $validated['slug'] = Str::slug($validated['name']);
+        }
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('categories', 'public');
+            $validated['image'] = '/storage/' . $path;
         }
 
         $category = Category::create($validated);
@@ -77,7 +82,7 @@ class CategoryController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'slug' => 'sometimes|nullable|string|max:255|unique:categories,slug,' . $id,
             'description' => 'nullable|string',
-            'image' => 'nullable|string',
+            'image' => 'nullable|image|max:2048', // Allow image upload
             'parent_id' => 'nullable|exists:categories,id',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
@@ -86,6 +91,14 @@ class CategoryController extends Controller
         if (isset($validated['name']) && empty($request->slug)) {
             $validated['slug'] = Str::slug($validated['name']);
         }
+
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('categories', 'public');
+            $validated['image'] = '/storage/' . $path;
+        }
+
+        // Keep old image if no new one uploaded (unless explicitly cleared, but here we just handle upload)
+        // If the user wants to remove the image, we'd need a separate flag or logic, but for now this suffices.
 
         $category->update($validated);
 

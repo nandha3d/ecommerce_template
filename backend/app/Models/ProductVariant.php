@@ -20,6 +20,9 @@ class ProductVariant extends Model
         'attributes',
         'image',
         'weight',
+        'length',
+        'breadth',
+        'height',
         'is_active',
     ];
 
@@ -28,6 +31,9 @@ class ProductVariant extends Model
         'sale_price' => 'decimal:2',
         'cost_price' => 'decimal:2',
         'weight' => 'decimal:2',
+        'length' => 'decimal:2',
+        'breadth' => 'decimal:2',
+        'height' => 'decimal:2',
         'attributes' => 'array',
         'is_active' => 'boolean',
     ];

@@ -60,8 +60,20 @@ export interface Product {
     custom_tabs?: CustomTab[];
     image_layout?: 'horizontal' | 'vertical';
     addon_groups?: AddonGroup[];
+    specifications?: SpecificationSection[];
     created_at: string;
     updated_at: string;
+}
+
+export interface SpecificationItem {
+    key: string;
+    value: string;
+}
+
+export interface SpecificationSection {
+    id: string;
+    title: string;
+    items: SpecificationItem[];
 }
 
 export interface CustomizationField {
@@ -145,7 +157,7 @@ export interface Category {
     image?: string;
     parent_id?: number;
     children?: Category[];
-    product_count?: number;
+    products_count?: number;
     is_active: boolean;
     sort_order?: number;
 }

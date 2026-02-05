@@ -21,10 +21,10 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'short_description' => $this->short_description,
             'price' => (float) $this->price,
-            'sale_price' => $this->sale_price ? (float) $this->sale_price : null,
-            'effective_price' => (float) ($this->sale_price ?? $this->price),
-            'is_on_sale' => $this->sale_price && $this->sale_price < $this->price,
-            'discount_percent' => $this->sale_price && $this->price > 0 
+            'sale_price' => $this->sale_price > 0 ? (float) $this->sale_price : null,
+            'effective_price' => (float) ($this->sale_price > 0 ? $this->sale_price : $this->price),
+            'is_on_sale' => $this->sale_price > 0 && $this->sale_price < $this->price,
+            'discount_percent' => $this->sale_price > 0 && $this->price > 0 
                 ? round((($this->price - $this->sale_price) / $this->price) * 100) 
                 : 0,
             'sku' => $this->sku,
@@ -64,7 +64,7 @@ class ProductResource extends JsonResource
                     'sku' => $v->sku,
                     'name' => $v->name,
                     'price' => (float) $v->price,
-                    'sale_price' => $v->sale_price ? (float) $v->sale_price : null,
+                    'sale_price' => $v->sale_price > 0 ? (float) $v->sale_price : null,
                     'stock_quantity' => $v->stock_quantity,
                     'in_stock' => $v->stock_quantity > 0,
                     'attributes' => $v->attributes,
@@ -90,6 +90,7 @@ class ProductResource extends JsonResource
             'customization_fields' => $this->customization_fields ?? [],
             'custom_tabs' => $this->custom_tabs ?? [],
             'image_layout' => $this->image_layout ?? 'horizontal',
+            'specifications' => $this->specifications,
             'addon_groups' => $this->whenLoaded('addonGroups', function () {
                 return $this->addonGroups->map(fn($group) => [
                     'id' => $group->id,

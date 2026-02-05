@@ -120,6 +120,7 @@ class ProductController extends Controller
             'custom_tabs' => 'nullable|array',
             'image_layout' => 'nullable|in:horizontal,vertical',
             'addon_groups' => 'nullable|array',
+            'specifications' => 'nullable|array',
         ]);
 
         DB::beginTransaction();
@@ -254,6 +255,7 @@ class ProductController extends Controller
             'custom_tabs' => 'nullable|array',
             'image_layout' => 'nullable|in:horizontal,vertical',
             'addon_groups' => 'nullable|array',
+            'specifications' => 'nullable|array',
         ]);
 
         DB::beginTransaction();

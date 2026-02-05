@@ -19,6 +19,10 @@ import { HomePage, ProductsPage, ProductDetailPage } from './features/products';
 import { CartPage } from './features/cart';
 import { CheckoutPage } from './features/checkout';
 import { LoginPage, RegisterPage } from './features/auth';
+import { ProfilePage } from './features/user';
+import { OrderHistoryPage } from './features/orders';
+import { WishlistPage } from './features/wishlist';
+import AdminThemeProvider from './features/admin/theme/AdminThemeProvider';
 
 // Admin Pages (lazy loaded)
 const AdminDashboard = React.lazy(() => import('./features/admin/pages/DashboardPage'));
@@ -89,10 +93,15 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+import { Toaster } from 'react-hot-toast';
+
+// ...
+
 // Main App Component
 const AppRoutes: React.FC = () => {
   return (
     <HelmetProvider>
+      <Toaster position="top-center" reverseOrder={false} />
       <StoreLayoutProvider>
         <BrowserRouter>
           <ConfigProvider>
@@ -105,7 +114,33 @@ const AppRoutes: React.FC = () => {
                   <Route path="/products/:slug" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
 
+
                   {/* Protected Customer Routes */}
+                  <Route
+                    path="/account"
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <ProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/account/orders"
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <OrderHistoryPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/account/wishlist"
+                    element={
+                      <ProtectedRoute requireAuth>
+                        <WishlistPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
                   <Route
                     path="/checkout"
                     element={
@@ -137,113 +172,122 @@ const AppRoutes: React.FC = () => {
 
                 {/* Admin Routes */}
                 <Route
-                  path="/admin"
+                  path="/admin/*"
                   element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading admin..." />}>
-                        <AdminDashboard />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/products"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminProducts />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/products/new"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminProductEdit />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/products/:id/edit"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminProductEdit />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/orders"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminOrders />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/license"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminLicense />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/categories"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminCategories />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/attributes"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminAttributes />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/customers"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminCustomers />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/analytics"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminAnalytics />
-                      </React.Suspense>
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/admin/settings"
-                  element={
-                    <ProtectedRoute requireAuth requireAdmin>
-                      <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                        <AdminSettings />
-                      </React.Suspense>
-                    </ProtectedRoute>
+                    <AdminThemeProvider>
+                      <Routes>
+                        <Route
+                          path="/" // Corresponds to /admin
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading admin..." />}>
+                                <AdminDashboard />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="products"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminProducts />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="products/new"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminProductEdit />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="products/:id/edit"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminProductEdit />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="orders"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminOrders />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="license"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminLicense />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="categories"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminCategories />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="attributes"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminAttributes />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="customers"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminCustomers />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="analytics"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminAnalytics />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                        <Route
+                          path="settings"
+                          element={
+                            <ProtectedRoute requireAuth requireAdmin>
+                              <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
+                                <AdminSettings />
+                              </React.Suspense>
+                            </ProtectedRoute>
+                          }
+                        />
+                      </Routes>
+                    </AdminThemeProvider>
                   }
                 />
 

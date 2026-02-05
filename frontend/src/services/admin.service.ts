@@ -20,6 +20,11 @@ export const adminService = {
     },
 
     async updateCategory(id: number, data: any): Promise<Category> {
+        if (data instanceof FormData) {
+            data.append('_method', 'PUT');
+            const response = await api.post<ApiResponse<Category>>(`/admin/categories/${id}`, data);
+            return response.data.data;
+        }
         const response = await api.put<ApiResponse<Category>>(`/admin/categories/${id}`, data);
         return response.data.data;
     },

@@ -207,11 +207,7 @@ const AdminLayoutInner: React.FC<AdminLayoutProps> = ({ children }) => {
 };
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
-    return (
-        <AdminThemeProvider>
-            <AdminLayoutInner>{children}</AdminLayoutInner>
-        </AdminThemeProvider>
-    );
+    return <AdminLayoutInner>{children}</AdminLayoutInner>;
 };
 
 export default AdminLayout;

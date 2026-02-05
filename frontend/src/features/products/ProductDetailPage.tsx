@@ -268,6 +268,7 @@ const ProductDetailPage: React.FC = () => {
             dispatch(fetchRelatedProducts(product.id));
             if (product.variants.length > 0) {
                 setSelectedVariant(product.variants[0]);
+                setSelectedAttributes(product.variants[0].attributes);
             }
             // Reset add-ons when product changes
             setSelectedAddons({});
@@ -563,7 +564,7 @@ const ProductDetailPage: React.FC = () => {
                                 ))}
                             </div>
                             <span className="text-neutral-600">
-                                {product.average_rating.toFixed(1)} ({product.review_count} reviews)
+                                {(product.average_rating || 0).toFixed(1)} ({product.review_count} reviews)
                             </span>
                         </div>
 
@@ -572,17 +573,17 @@ const ProductDetailPage: React.FC = () => {
                             <div className="flex flex-col gap-1">
                                 <div className="flex items-baseline gap-3">
                                     <span className="text-3xl font-bold text-primary-900">
-                                        ${totalPrice.toFixed(2)}
+                                        ${(totalPrice || 0).toFixed(2)}
                                     </span>
                                     {discountPercentage > 0 && (
                                         <span className="text-xl text-neutral-400 line-through">
-                                            ${totalOriginalPrice.toFixed(2)}
+                                            ${(totalOriginalPrice || 0).toFixed(2)}
                                         </span>
                                     )}
                                 </div>
                                 {quantity > 1 && (
                                     <span className="text-sm text-neutral-500">
-                                        ${unitPrice.toFixed(2)} each
+                                        ${(unitPrice || 0).toFixed(2)} each
                                     </span>
                                 )}
                             </div>
@@ -651,7 +652,7 @@ const ProductDetailPage: React.FC = () => {
                                                                 </p>
                                                                 {priceDiff !== null && (
                                                                     <p className={`text-xs mt-1 ${priceDiff > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                                                                        {priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}${Math.abs(priceDiff).toFixed(2)}
+                                                                        {priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}${Math.abs(priceDiff || 0).toFixed(2)}
                                                                     </p>
                                                                 )}
                                                             </button>
@@ -709,7 +710,7 @@ const ProductDetailPage: React.FC = () => {
                                                                 {value}
                                                                 {priceDiff !== null && (
                                                                     <span className={`text-xs ${isSelected ? 'text-white/80' : priceDiff > 0 ? 'text-orange-500' : 'text-green-500'}`}>
-                                                                        ({priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}${Math.abs(priceDiff).toFixed(2)})
+                                                                        ({priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}${Math.abs(priceDiff || 0).toFixed(2)})
                                                                     </span>
                                                                 )}
                                                             </button>
@@ -754,7 +755,7 @@ const ProductDetailPage: React.FC = () => {
                                                         <span className="font-medium">{option.name}</span>
                                                     </div>
                                                     {option.price > 0 && (
-                                                        <span className="text-primary-600 font-semibold">+${option.price.toFixed(2)}</span>
+                                                        <span className="text-primary-600 font-semibold">+${(option.price || 0).toFixed(2)}</span>
                                                     )}
                                                 </label>
                                             ))}
@@ -961,19 +962,19 @@ const ProductDetailPage: React.FC = () => {
                                 {/* Quantity */}
                                 <div>
                                     <p className="text-sm font-medium text-neutral-700 mb-2">Quantity</p>
-                                    <div className="flex items-center border border-neutral-200 rounded-lg w-fit">
+                                    <div className="flex items-center border border-neutral-200 rounded-lg w-fit h-10">
                                         <button
                                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                                            className="p-3 hover:bg-neutral-100 transition-colors"
+                                            className="px-3 h-full hover:bg-neutral-50 transition-colors flex items-center justify-center text-neutral-500 hover:text-neutral-900"
                                         >
-                                            <Minus className="w-4 h-4" />
+                                            <Minus className="w-3.5 h-3.5" />
                                         </button>
-                                        <span className="w-12 text-center font-medium">{quantity}</span>
+                                        <span className="w-10 text-center font-medium text-sm">{quantity}</span>
                                         <button
                                             onClick={() => setQuantity(quantity + 1)}
-                                            className="p-3 hover:bg-neutral-100 transition-colors"
+                                            className="px-3 h-full hover:bg-neutral-50 transition-colors flex items-center justify-center text-neutral-500 hover:text-neutral-900"
                                         >
-                                            <Plus className="w-4 h-4" />
+                                            <Plus className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
                                 </div>
@@ -983,8 +984,8 @@ const ProductDetailPage: React.FC = () => {
                                     onClick={handleAddToCart}
                                     disabled={product.stock_status === 'out_of_stock'}
                                     fullWidth
-                                    size="lg"
-                                    leftIcon={<ShoppingCart className="w-5 h-5" />}
+                                    leftIcon={<ShoppingCart className="w-4 h-4" />}
+                                    className="h-10 text-sm font-medium"
                                 >
                                     {product.stock_status === 'out_of_stock' ? 'Out of Stock' : 'Add to Cart'}
                                 </Button>
@@ -995,8 +996,7 @@ const ProductDetailPage: React.FC = () => {
                                     disabled={product.stock_status === 'out_of_stock'}
                                     variant="secondary"
                                     fullWidth
-                                    size="lg"
-                                    className="bg-neutral-900 text-white hover:bg-neutral-800"
+                                    className="h-10 bg-neutral-900 text-white hover:bg-neutral-800 text-sm font-medium"
                                 >
                                     Buy Now
                                 </Button>
@@ -1068,6 +1068,17 @@ const ProductDetailPage: React.FC = () => {
                                         {tab.title}
                                     </button>
                                 ))}
+                                {product.specifications && product.specifications.length > 0 && (
+                                    <button
+                                        onClick={() => setActiveTab('specifications')}
+                                        className={`py-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'specifications'
+                                            ? 'border-primary-500 text-primary-500'
+                                            : 'border-transparent text-neutral-500 hover:text-neutral-900'
+                                            }`}
+                                    >
+                                        Specifications
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => setActiveTab('reviews')}
                                     className={`py-4 px-2 font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === 'reviews'
@@ -1100,11 +1111,45 @@ const ProductDetailPage: React.FC = () => {
                                     {product.ingredients && (
                                         <div className="mt-8">
                                             <h3 className="text-xl font-bold mb-4">Ingredients</h3>
-                                            <p className="text-neutral-600">{product.ingredients}</p>
+                                            <p className="text-neutral-600 leading-relaxed bg-neutral-50 p-6 rounded-xl">
+                                                {product.ingredients}
+                                            </p>
                                         </div>
                                     )}
                                 </div>
                             )}
+
+                            {activeTab === 'specifications' && (
+                                <div className="space-y-8 animate-fadeIn">
+                                    {product.specifications?.map((section: any, idx: number) => (
+                                        <div key={idx} className="max-w-5xl mx-auto bg-white rounded-lg border border-primary-100 overflow-hidden shadow-sm">
+                                            <div className="bg-primary-600 px-4 py-3 border-b border-primary-600">
+                                                <h3 className="font-bold text-white text-base uppercase tracking-wider">{section.title}</h3>
+                                            </div>
+                                            <div className="divide-y divide-primary-100">
+                                                {Array.from({ length: Math.ceil(section.items.length / 2) }).map((_, rIdx) => {
+                                                    const rowItems = section.items.slice(rIdx * 2, rIdx * 2 + 2);
+                                                    return (
+                                                        <div key={rIdx} className={`flex flex-col md:flex-row ${rIdx % 2 === 0 ? 'bg-white' : 'bg-primary-50/30'}`}>
+                                                            {rowItems.map((item: any, iIdx: number) => (
+                                                                <div key={iIdx} className="flex-1 flex items-center justify-between px-6 py-4 border-b md:border-b-0 border-primary-100 last:border-0 md:border-r md:last:border-r-0">
+                                                                    <span className="text-primary-900 font-semibold text-sm w-1/3">{item.key}</span>
+                                                                    <span className="text-neutral-700 font-medium text-sm w-2/3 text-right md:text-left pl-4">{item.value}</span>
+                                                                </div>
+                                                            ))}
+                                                            {/* Empty filler for odd items to maintain grid look */}
+                                                            {rowItems.length === 1 && (
+                                                                <div className="hidden md:block flex-1"></div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
 
                             {activeTab === 'nutrition' && product.nutrition_facts && (
                                 <div className="max-w-md">
@@ -1176,7 +1221,7 @@ const ProductDetailPage: React.FC = () => {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

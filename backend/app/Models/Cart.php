@@ -47,7 +47,7 @@ class Cart extends Model
      */
     public function getSubtotalAttribute(): float
     {
-        return (new CartPricingService())->getSubtotal($this);
+        return app(CartPricingService::class)->getSubtotal($this);
     }
 
     /**
@@ -55,7 +55,7 @@ class Cart extends Model
      */
     public function getDiscountAttribute(): float
     {
-        return (new CartPricingService())->getDiscount($this);
+        return app(CartPricingService::class)->getDiscount($this);
     }
 
     /**
@@ -63,7 +63,7 @@ class Cart extends Model
      */
     public function getShippingAttribute(): float
     {
-        return (new CartPricingService())->getShipping($this);
+        return app(CartPricingService::class)->getShipping($this);
     }
 
     /**
@@ -71,7 +71,7 @@ class Cart extends Model
      */
     public function getTaxAttribute(): float
     {
-        return (new CartPricingService())->getTax($this);
+        return app(CartPricingService::class)->getTax($this);
     }
 
     /**
@@ -79,7 +79,7 @@ class Cart extends Model
      */
     public function getTotalAttribute(): float
     {
-        return (new CartPricingService())->getTotal($this);
+        return app(CartPricingService::class)->getTotal($this);
     }
 
     /**

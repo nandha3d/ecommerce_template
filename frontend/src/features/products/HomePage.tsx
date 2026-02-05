@@ -232,7 +232,7 @@ const HomePage: React.FC = () => {
                                 <div className="absolute inset-0 bg-gradient-to-t from-primary-900/80 via-primary-900/20 to-transparent" />
                                 <div className="absolute bottom-0 left-0 right-0 p-6">
                                     <h3 className="text-white font-bold text-lg mb-1">{category.name}</h3>
-                                    <p className="text-white/70 text-sm">{category.product_count || 0} products</p>
+                                    <p className="text-white/70 text-sm">{category.products_count || 0} products</p>
                                 </div>
                             </Link>
                         ))}

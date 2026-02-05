@@ -38,6 +38,8 @@ const CategoriesPage: React.FC = () => {
         fetchCategories();
     }, []);
 
+    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+
     const handleOpenModal = (category?: Category) => {
         if (category) {
             setEditingCategory(category);
@@ -54,6 +56,7 @@ const CategoriesPage: React.FC = () => {
                 is_active: true
             });
         }
+        setSelectedImage(null);
         setIsModalOpen(true);
     };
 
@@ -61,17 +64,27 @@ const CategoriesPage: React.FC = () => {
         setIsModalOpen(false);
         setEditingCategory(null);
         setFormData({ name: '', description: '', is_active: true });
+        setSelectedImage(null);
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
             setIsSaving(true);
+
+            const data = new FormData();
+            data.append('name', formData.name);
+            data.append('description', formData.description);
+            data.append('is_active', formData.is_active ? '1' : '0');
+            if (selectedImage) {
+                data.append('image', selectedImage);
+            }
+
             if (editingCategory) {
-                await adminService.updateCategory(editingCategory.id, formData);
+                await adminService.updateCategory(editingCategory.id, data);
                 toast.success('Category updated successfully');
             } else {
-                await adminService.createCategory(formData);
+                await adminService.createCategory(data);
                 toast.success('Category created successfully');
             }
             fetchCategories();
@@ -83,118 +96,96 @@ const CategoriesPage: React.FC = () => {
         }
     };
 
-    const handleDelete = async (id: number) => {
-        if (!window.confirm('Are you sure you want to delete this category?')) return;
-        try {
-            await adminService.deleteCategory(id);
-            toast.success('Category deleted successfully');
-            fetchCategories();
-        } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Failed to delete category');
-        }
-    };
-
-    const filteredCategories = categories.filter(c =>
-        c.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
     return (
         <AdminLayout>
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-primary-900">Categories</h1>
-                        <p className="text-neutral-600">Manage product categories</p>
-                    </div>
-                    <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
-                        <Plus className="w-4 h-4" />
-                        Add Category
-                    </Button>
-                </div>
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-secondary-900">Categories</h1>
+                <Button onClick={() => handleOpenModal()}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Category
+                </Button>
+            </div>
 
-                {/* Filters */}
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-neutral-200 flex gap-4">
-                    <div className="relative flex-1 max-w-md">
+            <div className="bg-white rounded-xl border border-neutral-200 shadow-sm overflow-hidden">
+                <div className="p-4 border-b border-neutral-200">
+                    <div className="relative max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                        <input
-                            type="text"
+                        <Input
                             placeholder="Search categories..."
+                            className="pl-10"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                     </div>
                 </div>
 
-                {/* Table */}
-                <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
-                    {isLoading ? (
-                        <div className="p-8 flex justify-center">
-                            <Loader />
-                        </div>
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead className="bg-neutral-50 border-b border-neutral-200">
-                                    <tr>
-                                        <th className="px-6 py-4 font-semibold text-neutral-700">Name</th>
-                                        <th className="px-6 py-4 font-semibold text-neutral-700">Slug</th>
-                                        <th className="px-6 py-4 font-semibold text-neutral-700">Products</th>
-                                        <th className="px-6 py-4 font-semibold text-neutral-700">Status</th>
-                                        <th className="px-6 py-4 font-semibold text-neutral-700 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-neutral-200">
-                                    {filteredCategories.length > 0 ? (
-                                        filteredCategories.map((category) => (
-                                            <tr key={category.id} className="hover:bg-neutral-50 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="font-medium text-neutral-900">{category.name}</div>
-                                                    {category.description && (
-                                                        <div className="text-sm text-neutral-500 truncate max-w-xs">{category.description}</div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-neutral-600">{category.slug}</td>
-                                                <td className="px-6 py-4 text-sm text-neutral-600">
-                                                    {(category as any).products_count || 0} items
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <Badge variant={category.is_active ? 'success' : 'warning'}>
-                                                        {category.is_active ? 'Active' : 'Inactive'}
-                                                    </Badge>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button
-                                                            onClick={() => handleOpenModal(category)}
-                                                            className="p-2 rounded-lg text-neutral-400 hover:text-primary-600 hover:bg-primary-50 transition-colors"
-                                                            title="Edit"
-                                                        >
-                                                            <Edit2 className="w-4 h-4" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(category.id)}
-                                                            className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                            title="Delete"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
+                <div className="overflow-x-auto">
+                    <table className="w-full">
+                        <thead className="bg-neutral-50 border-b border-neutral-200">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Name</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Description</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Products</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-3 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-200">
+                            {isLoading ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                                        <Loader className="w-6 h-6 mx-auto mb-2" />
+                                        Loading categories...
+                                    </td>
+                                </tr>
+                            ) : categories.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                                        No categories found
+                                    </td>
+                                </tr>
+                            ) : (
+                                categories.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())).map((category) => (
+                                    <tr key={category.id} className="hover:bg-neutral-50">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-3">
+                                                {category.image ? (
+                                                    <img src={category.image} alt={category.name} className="w-10 h-10 rounded-lg object-cover" />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center text-primary-600 font-bold">
+                                                        {category.name.charAt(0)}
                                                     </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
-                                                No categories found.
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
+                                                )}
+                                                <span className="font-medium text-neutral-900">{category.name}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p className="text-sm text-neutral-500 truncate max-w-xs">{category.description}</p>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral-500">
+                                            {category.products_count || 0} items
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <Badge variant={category.is_active ? 'success' : 'default'}>
+                                                {category.is_active ? 'Active' : 'Inactive'}
+                                            </Badge>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <div className="flex justify-end gap-2">
+                                                <button
+                                                    onClick={() => handleOpenModal(category)}
+                                                    className="p-1 text-neutral-500 hover:text-primary-600 transition-colors"
+                                                >
+                                                    <Edit2 className="w-4 h-4" />
+                                                </button>
+                                                {/* Add delete button logic if needed */}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -222,6 +213,27 @@ const CategoriesPage: React.FC = () => {
                             placeholder="Short description"
                             className="w-full px-4 py-2 rounded-lg border border-neutral-200 focus:outline-none focus:ring-2 focus:ring-primary-500 min-h-[100px]"
                         />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-neutral-700 mb-1">Image</label>
+                        <div className="flex items-center gap-4">
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                    if (e.target.files && e.target.files[0]) {
+                                        setSelectedImage(e.target.files[0]);
+                                    }
+                                }}
+                                className="block w-full text-sm text-neutral-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                            />
+                        </div>
+                        {editingCategory && (editingCategory as any).image && !selectedImage && (
+                            <p className="text-xs text-neutral-500 mt-1">Current image: {(editingCategory as any).image}</p>
+                        )}
+                        {selectedImage && (
+                            <p className="text-xs text-success-600 mt-1">Selected: {selectedImage.name}</p>
+                        )}
                     </div>
                     <div className="flex items-center gap-2">
                         <input

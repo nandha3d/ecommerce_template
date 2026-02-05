@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import {
     SlidersHorizontal,
@@ -282,14 +283,28 @@ const ProductsPage: React.FC = () => {
                     </div>
                 ) : (
                     <>
-                        <div className={`grid gap-6 ${viewMode === 'grid'
-                            ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-                            : 'grid-cols-1'
-                            }`}>
+                        <motion.div
+                            className={`grid gap-6 ${viewMode === 'grid'
+                                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+                                : 'grid-cols-1'
+                                }`}
+                            initial="hidden"
+                            animate="visible"
+                            variants={{
+                                hidden: { opacity: 0 },
+                                visible: {
+                                    opacity: 1,
+                                    transition: {
+                                        staggerChildren: 0.1,
+                                        delayChildren: 0.1
+                                    }
+                                }
+                            }}
+                        >
                             {products.map((product) => (
                                 <ProductCard key={product.id} product={product} />
                             ))}
-                        </div>
+                        </motion.div>
 
                         {/* Pagination */}
                         {pagination && pagination.last_page > 1 && (

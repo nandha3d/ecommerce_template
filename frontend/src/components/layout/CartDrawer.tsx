@@ -3,6 +3,7 @@ import { X, Plus, Minus, ShoppingBag, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
 import { setCartOpen, updateCartItem, removeFromCart } from '../../store/slices/cartSlice';
+import { getImageUrl } from '../../utils/imageUtils';
 import { Button, Loader } from '../ui';
 
 const CartDrawer: React.FC = () => {
@@ -85,7 +86,7 @@ const CartDrawer: React.FC = () => {
                                         className="w-20 h-20 bg-white rounded-lg overflow-hidden flex-shrink-0"
                                     >
                                         <img
-                                            src={item.product.images[0]?.url || '/placeholder-product.jpg'}
+                                            src={item.product.images[0]?.url ? getImageUrl(item.product.images[0].url) : '/placeholder-product.jpg'}
                                             alt={item.product.name}
                                             className="w-full h-full object-cover"
                                         />
@@ -124,7 +125,7 @@ const CartDrawer: React.FC = () => {
                                                 </button>
                                             </div>
                                             <span className="font-bold text-primary-900">
-                                                ${item.total_price.toFixed(2)}
+                                                ${(item.total_price || 0).toFixed(2)}
                                             </span>
                                         </div>
                                     </div>
@@ -149,21 +150,21 @@ const CartDrawer: React.FC = () => {
                         <div className="space-y-2">
                             <div className="flex justify-between text-neutral-600">
                                 <span>Subtotal</span>
-                                <span>${cart.subtotal.toFixed(2)}</span>
+                                <span>${(cart.subtotal || 0).toFixed(2)}</span>
                             </div>
                             {cart.discount > 0 && (
                                 <div className="flex justify-between text-success">
                                     <span>Discount</span>
-                                    <span>-${cart.discount.toFixed(2)}</span>
+                                    <span>-${(cart.discount || 0).toFixed(2)}</span>
                                 </div>
                             )}
                             <div className="flex justify-between text-neutral-600">
                                 <span>Shipping</span>
-                                <span>{cart.shipping === 0 ? 'Free' : `$${cart.shipping.toFixed(2)}`}</span>
+                                <span>{cart.shipping === 0 ? 'Free' : `$${(cart.shipping || 0).toFixed(2)}`}</span>
                             </div>
                             <div className="flex justify-between text-lg font-bold text-primary-900 pt-2 border-t border-neutral-100">
                                 <span>Total</span>
-                                <span>${cart.total.toFixed(2)}</span>
+                                <span>${(cart.total || 0).toFixed(2)}</span>
                             </div>
                         </div>
 

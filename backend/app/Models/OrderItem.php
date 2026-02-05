@@ -13,14 +13,18 @@ class OrderItem extends Model
         'order_id',
         'product_id',
         'variant_id',
-        'name',
+        'product_name',
+        'variant_name',
         'sku',
-        'price',
+        'unit_price',
+        'total_price',
         'quantity',
+        'image',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'unit_price' => 'decimal:2',
+        'total_price' => 'decimal:2',
         'quantity' => 'integer',
     ];
 
@@ -45,6 +49,6 @@ class OrderItem extends Model
      */
     public function getSubtotalAttribute()
     {
-        return $this->price * $this->quantity;
+        return $this->unit_price * $this->quantity;
     }
 }

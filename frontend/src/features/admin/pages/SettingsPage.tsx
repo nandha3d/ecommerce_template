@@ -283,10 +283,148 @@ const ThemeSettingsContent: React.FC = () => {
     );
 };
 
+import { shippingService } from '../../../services/shipping.service';
+
+
+
+// ... (We need to refactor ThemeSettingsContent to be a tab inside a larger Settings container)
+// But to minimize diffs and modifying existing complex code excessively, 
+// I will create a new 'ShippingSettingsContent' component and then wrap them in a simple Tab system within SettingsPage.
+
+const ShippingSettingsContent: React.FC = () => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [pickupLocation, setPickupLocation] = useState('');
+    const [channelId, setChannelId] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            await shippingService.updateConfig({ email, password, channel_id: channelId, pickup_location: pickupLocation });
+            toast.success('Shipping configuration saved!');
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || 'Failed to save configuration');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleTest = async () => {
+        setIsTesting(true);
+        try {
+            const res = await shippingService.testConnection();
+            toast.success(res.message);
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || 'Connection failed');
+        } finally {
+            setIsTesting(false);
+        }
+    };
+
+    return (
+        <div className="max-w-2xl space-y-6">
+            <div>
+                <h2 className="text-xl font-bold text-neutral-900">Shiprocket Configuration</h2>
+                <p className="text-neutral-600">Enter your Shiprocket API credentials to enable automated shipping.</p>
+            </div>
+
+            <Card hover={false}>
+                <form onSubmit={handleSave} className="space-y-4">
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-neutral-900">Account Email</label>
+                        <input
+                            type="email"
+                            required
+                            value={email}
+                            onChange={e => setEmail(e.target.value)}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            placeholder="your-email@example.com"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-neutral-900">Account Password</label>
+                        <input
+                            type="password"
+                            required
+                            value={password}
+                            onChange={e => setPassword(e.target.value)}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            placeholder="••••••••"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-neutral-900">Custom Channel ID (Optional)</label>
+                        <input
+                            type="text"
+                            value={channelId}
+                            onChange={e => setChannelId(e.target.value)}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            placeholder="e.g. 12345"
+                        />
+                        <p className="text-xs text-neutral-500">Found in Shiprocket: Channels -{'>'} Channel ID</p>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-neutral-900">Pickup Location ID (Optional)</label>
+                        <input
+                            type="text"
+                            value={pickupLocation}
+                            onChange={e => setPickupLocation(e.target.value)}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            placeholder="Primary"
+                        />
+                        <p className="text-xs text-neutral-500">The exact name of your pickup location in Shiprocket.</p>
+                    </div>
+
+                    <div className="flex gap-3 pt-4 border-t border-neutral-100">
+                        <Button type="submit" variant="primary" isLoading={isLoading}>Save Configuration</Button>
+                        <Button type="button" variant="outline" onClick={handleTest} isLoading={isTesting}>Test Connection</Button>
+                    </div>
+                </form>
+            </Card>
+
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800">
+                <p className="font-bold mb-1">How it works:</p>
+                <ul className="list-disc list-inside space-y-1">
+                    <li>Orders will be synced to Shiprocket when marked as "Processing".</li>
+                    <li>Tracking numbers will be auto-generated.</li>
+                    <li>Address availability checks are performed at checkout (if enabled).</li>
+                </ul>
+            </div>
+        </div>
+    );
+};
+
 const SettingsPage: React.FC = () => {
+    const [activeTab, setActiveTab] = useState<'theme' | 'shipping'>('theme');
+
     return (
         <AdminLayout>
-            <ThemeSettingsContent />
+            <div className="flex flex-col gap-6">
+                {/* Simple Tab Header */}
+                <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit">
+                    <button
+                        onClick={() => setActiveTab('theme')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'theme' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}
+                    >
+                        Store Appearance
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('shipping')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'shipping' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}
+                    >
+                        Shipping & Delivery
+                    </button>
+                </div>
+
+                {activeTab === 'theme' && <ThemeSettingsContent />}
+                {activeTab === 'shipping' && <ShippingSettingsContent />}
+            </div>
         </AdminLayout>
     );
 };

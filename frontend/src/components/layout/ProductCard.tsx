@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, Eye } from 'lucide-react';
 import { Product } from '../../types';
@@ -18,7 +19,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
     const navigate = useNavigate();
     const { isAuthenticated } = useAppSelector((state) => state.auth);
 
-    const discountPercentage = product.sale_price
+    const discountPercentage = (product.sale_price && product.price)
         ? Math.round(((product.price - product.sale_price) / product.price) * 100)
         : 0;
 
@@ -44,10 +45,27 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
         }
     };
 
+    const MotionLink = motion.create(Link);
+
     return (
-        <Link
+        <MotionLink
             to={`/products/${product.slug}`}
             className="group block bg-white rounded-xl border border-neutral-200/50 overflow-hidden shadow-card hover:shadow-soft transition-all duration-300"
+            variants={{
+                hidden: { opacity: 0, scale: 0.8, y: 30 },
+                visible: {
+                    opacity: 1,
+                    scale: 1,
+                    y: 0,
+                    transition: {
+                        type: "spring",
+                        stiffness: 100,
+                        damping: 15,
+                        mass: 0.8
+                    }
+                }
+            }}
+            whileHover={{ y: -5, transition: { duration: 0.2 } }}
         >
             {/* Image Container */}
             <div className="relative aspect-square overflow-hidden bg-neutral-50">
@@ -56,6 +74,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
                     alt={product.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
+                    decoding="async"
                 />
 
                 {/* Badges */}
@@ -156,15 +175,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
                     {product.sale_price ? (
                         <>
                             <span className="text-lg font-bold text-primary-900">
-                                ${product.sale_price.toFixed(2)}
+                                ${(Number(product.sale_price) || 0).toFixed(2)}
                             </span>
                             <span className="text-sm text-neutral-400 line-through">
-                                ${product.price.toFixed(2)}
+                                ${(Number(product.price) || 0).toFixed(2)}
                             </span>
                         </>
                     ) : (
                         <span className="text-lg font-bold text-primary-900">
-                            ${product.price.toFixed(2)}
+                            ${(Number(product.price) || 0).toFixed(2)}
                         </span>
                     )}
                 </div>
@@ -174,7 +193,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
                     {getStockBadge()}
                 </div>
             </div>
-        </Link>
+        </MotionLink>
     );
 };
 

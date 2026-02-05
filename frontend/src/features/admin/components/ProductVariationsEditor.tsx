@@ -19,6 +19,11 @@ interface Variant {
   attributes: Record<string, string>;
   is_active: boolean;
   image?: string;
+  // Shipping dimensions
+  weight?: number;
+  length?: number;
+  breadth?: number;
+  height?: number;
 }
 
 interface Props {
@@ -41,6 +46,7 @@ const ProductVariationsEditor: React.FC<Props> = ({
   const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string[]>>({});
   const [generating, setGenerating] = useState(false);
 
+  // ... (handlers remain the same) 
   const handleAttributeSelect = (attrSlug: string, value: string, checked: boolean) => {
     setSelectedAttributes(prev => {
       const current = prev[attrSlug] || [];
@@ -67,7 +73,16 @@ const ProductVariationsEditor: React.FC<Props> = ({
       });
       const data = response.data;
       if (data.success) {
-        onVariantsChange([...variants, ...data.data.map((v: any) => ({ ...v, is_active: true }))]);
+        // Initialize new variants with defaults
+        const newVariants = data.data.map((v: any) => ({
+          ...v,
+          is_active: true,
+          weight: 0.5,
+          length: 10,
+          breadth: 10,
+          height: 10
+        }));
+        onVariantsChange([...variants, ...newVariants]);
       }
     } catch (error) {
       console.error('Failed to generate variants:', error);
@@ -87,6 +102,7 @@ const ProductVariationsEditor: React.FC<Props> = ({
   };
 
   const handleImageUpload = async (index: number, file: File) => {
+    // ... (image upload logic remains same)
     try {
       const webpFile = await convertToWebP(file);
       const formData = new FormData();
@@ -115,6 +131,7 @@ const ProductVariationsEditor: React.FC<Props> = ({
 
       {/* Attribute Selector */}
       <div className="attribute-selector">
+        {/* ... selector UI remains same ... */}
         <h4>Select Attributes</h4>
         <div className="attributes-grid">
           {attributes.map(attr => (
@@ -155,18 +172,19 @@ const ProductVariationsEditor: React.FC<Props> = ({
         <div className="variants-table-container">
           <h4>Variants ({variants.length})</h4>
           <div className="variants-table">
-            <div className="table-header">
+            <div className="table-header" style={{ gridTemplateColumns: '60px 1.5fr 1fr 100px 80px 80px 180px 60px 40px' }}>
               <span>Image</span>
               <span>Variant</span>
               <span>SKU</span>
               <span>Price</span>
-              <span>Sale Price</span>
               <span>Stock</span>
+              <span>Weight (kg)</span>
+              <span>Dimensions (L x B x H)</span>
               <span>Active</span>
               <span></span>
             </div>
             {variants.map((variant, index) => (
-              <div key={index} className="table-row">
+              <div key={index} className="table-row" style={{ gridTemplateColumns: '60px 1.5fr 1fr 100px 80px 80px 180px 60px 40px' }}>
                 {/* Image Upload */}
                 <div className="variant-image-cell">
                   {variant.image ? (
@@ -192,36 +210,75 @@ const ProductVariationsEditor: React.FC<Props> = ({
                     </label>
                   )}
                 </div>
+
+                {/* Variant Attributes */}
                 <span className="variant-attrs">
                   {Object.entries(variant.attributes).map(([k, v]) => (
                     <span key={k} className="attr-badge">{v}</span>
                   ))}
                 </span>
+
+                {/* SKU */}
                 <input
                   type="text"
                   value={variant.sku}
                   onChange={(e) => updateVariant(index, 'sku', e.target.value)}
                   className="input-sku"
                 />
+
+                {/* Price */}
                 <input
                   type="number"
                   value={variant.price}
                   onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value))}
                   className="input-price"
                 />
-                <input
-                  type="number"
-                  value={variant.sale_price || ''}
-                  onChange={(e) => updateVariant(index, 'sale_price', e.target.value ? parseFloat(e.target.value) : null)}
-                  className="input-price"
-                  placeholder="Optional"
-                />
+
+                {/* Stock */}
                 <input
                   type="number"
                   value={variant.stock_quantity}
                   onChange={(e) => updateVariant(index, 'stock_quantity', parseInt(e.target.value))}
                   className="input-stock"
                 />
+
+                {/* Weight */}
+                <input
+                  type="number"
+                  step="0.01"
+                  value={variant.weight || 0.5}
+                  onChange={(e) => updateVariant(index, 'weight', parseFloat(e.target.value))}
+                  className="input-stock"
+                />
+
+                {/* Dimensions */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <input
+                    type="number"
+                    placeholder="L"
+                    value={variant.length || 10}
+                    onChange={(e) => updateVariant(index, 'length', parseFloat(e.target.value))}
+                    className="input-stock"
+                    style={{ padding: '4px', textAlign: 'center' }}
+                  />
+                  <input
+                    type="number"
+                    placeholder="B"
+                    value={variant.breadth || 10}
+                    onChange={(e) => updateVariant(index, 'breadth', parseFloat(e.target.value))}
+                    className="input-stock"
+                    style={{ padding: '4px', textAlign: 'center' }}
+                  />
+                  <input
+                    type="number"
+                    placeholder="H"
+                    value={variant.height || 10}
+                    onChange={(e) => updateVariant(index, 'height', parseFloat(e.target.value))}
+                    className="input-stock"
+                    style={{ padding: '4px', textAlign: 'center' }}
+                  />
+                </div>
+
                 <label className="toggle-small">
                   <input
                     type="checkbox"

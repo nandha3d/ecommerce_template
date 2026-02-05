@@ -223,6 +223,7 @@ class ProductController extends Controller
         try {
             $categories = Category::whereNull('parent_id')
                                   ->with('children')
+                                  ->withCount('products')
                                   ->orderBy('name')
                                   ->get();
 

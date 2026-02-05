@@ -29,6 +29,10 @@ interface ProductVariant {
     attributes: Record<string, string>;
     image?: string | null;
     is_active: boolean;
+    weight?: number;
+    length?: number;
+    breadth?: number;
+    height?: number;
 }
 
 interface CustomTab {
@@ -68,8 +72,20 @@ interface Brand { id: number; name: string; slug: string; }
 interface AttributeOption { id: number; value: string; label?: string; color_code?: string; image?: string; }
 interface Attribute { id: number; name: string; slug: string; type: string; options: AttributeOption[]; }
 
+interface SpecificationItem {
+    key: string;
+    value: string;
+}
+
+interface SpecificationSection {
+    id: string;
+    title: string;
+    items: SpecificationItem[];
+}
+
 interface ProductFormData {
     name: string;
+    // ... (keep existing fields)
     sku: string;
     description: string;
     short_description: string;
@@ -87,6 +103,11 @@ interface ProductFormData {
     ingredients: string;
     images: ProductImage[];
     variants: ProductVariant[];
+    // Shipping dimensions
+    weight: number;
+    length: number;
+    breadth: number;
+    height: number;
     // New fields
     is_digital: boolean;
     is_downloadable: boolean;
@@ -97,6 +118,7 @@ interface ProductFormData {
     custom_tabs: CustomTab[];
     image_layout: 'horizontal' | 'vertical';
     addon_groups: AddonGroup[];
+    specifications: SpecificationSection[];
 }
 
 const defaultFormData: ProductFormData = {
@@ -118,6 +140,12 @@ const defaultFormData: ProductFormData = {
     ingredients: '',
     images: [],
     variants: [],
+    // Shipping
+    weight: 0.5,
+    length: 10,
+    breadth: 10,
+    height: 10,
+    // Digital
     is_digital: false,
     is_downloadable: false,
     download_limit: null,
@@ -127,9 +155,10 @@ const defaultFormData: ProductFormData = {
     custom_tabs: [],
     image_layout: 'horizontal',
     addon_groups: [],
+    specifications: [],
 };
 
-type TabType = 'basic' | 'pricing' | 'images' | 'variants' | 'addons' | 'customization' | 'tabs' | 'seo';
+type TabType = 'basic' | 'pricing' | 'images' | 'variants' | 'addons' | 'customization' | 'tabs' | 'seo' | 'specifications';
 
 const ProductEditPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -137,6 +166,21 @@ const ProductEditPage: React.FC = () => {
     const isEditing = Boolean(id && id !== 'new');
 
     const [activeTab, setActiveTab] = useState<TabType>('basic');
+    // ... (lines 169-556) ...
+
+    // ...
+
+    const tabs = [
+        { id: 'basic' as TabType, label: 'Basic Info', icon: Package },
+        { id: 'pricing' as TabType, label: 'Pricing', icon: DollarSign },
+        { id: 'images' as TabType, label: 'Images', icon: ImageIcon },
+        { id: 'variants' as TabType, label: 'Variants', icon: Tags },
+        { id: 'specifications' as TabType, label: 'Specifications', icon: FileText },
+        { id: 'addons' as TabType, label: 'Add-ons', icon: Layers },
+        { id: 'customization' as TabType, label: 'Customization', icon: Sliders },
+        { id: 'tabs' as TabType, label: 'Custom Tabs', icon: FileText },
+        { id: 'seo' as TabType, label: 'SEO', icon: Settings },
+    ];
     const [formData, setFormData] = useState<ProductFormData>(defaultFormData);
     const [categories, setCategories] = useState<Category[]>([]);
     const [brands, setBrands] = useState<Brand[]>([]);
@@ -146,6 +190,7 @@ const ProductEditPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [expandedVariants, setExpandedVariants] = useState<Record<number, boolean>>({});
+    const [units, setUnits] = useState({ weight: 'kg', dimension: 'cm' });
 
     // Fetch categories, brands, and attributes
     useEffect(() => {
@@ -159,6 +204,19 @@ const ProductEditPage: React.FC = () => {
                 setCategories(catRes.data.data || []);
                 setBrands(brandRes.data.data || []);
                 setAttributes(attrRes.data.data || []);
+
+                // Fetch System Config for Units
+                try {
+                    const configRes = await api.get('/system/config');
+                    if (configRes.data.success) {
+                        setUnits({
+                            weight: configRes.data.data.shipping_weight_unit || 'kg',
+                            dimension: configRes.data.data.shipping_dimension_unit || 'cm',
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch system config', e);
+                }
             } catch (err) {
                 console.error('Failed to fetch options:', err);
             }
@@ -219,6 +277,12 @@ const ProductEditPage: React.FC = () => {
                         ingredients: product.ingredients || '',
                         images: product.images || [],
                         variants: variants,
+                        // Dimensions
+                        weight: Number(product.weight) || 0.5,
+                        length: Number(product.length) || 10,
+                        breadth: Number(product.breadth) || 10,
+                        height: Number(product.height) || 10,
+                        // Digital
                         is_digital: product.is_digital ?? false,
                         is_downloadable: product.is_downloadable ?? false,
                         download_limit: product.download_limit,
@@ -228,6 +292,7 @@ const ProductEditPage: React.FC = () => {
                         custom_tabs: product.custom_tabs || [],
                         image_layout: product.image_layout || 'horizontal',
                         addon_groups: product.addon_groups || [],
+                        specifications: product.specifications || [],
                     });
                 } catch (err: any) {
                     setError(err.message || 'Failed to fetch product');
@@ -480,6 +545,64 @@ const ProductEditPage: React.FC = () => {
         }));
     };
 
+    // Specification handlers
+    const addSpecificationSection = () => {
+        const newSection: SpecificationSection = {
+            id: `spec-section-${Date.now()}`,
+            title: 'New Section',
+            items: [],
+        };
+        setFormData(prev => ({
+            ...prev,
+            specifications: [...prev.specifications, newSection],
+        }));
+    };
+
+    const updateSpecificationSection = (index: number, title: string) => {
+        setFormData(prev => ({
+            ...prev,
+            specifications: prev.specifications.map((s, i) => i === index ? { ...s, title } : s),
+        }));
+    };
+
+    const removeSpecificationSection = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            specifications: prev.specifications.filter((_, i) => i !== index),
+        }));
+    };
+
+    const addSpecificationItem = (sectionIndex: number) => {
+        setFormData(prev => ({
+            ...prev,
+            specifications: prev.specifications.map((s, i) =>
+                i === sectionIndex ? { ...s, items: [...s.items, { key: '', value: '' }] } : s
+            ),
+        }));
+    };
+
+    const updateSpecificationItem = (sectionIndex: number, itemIndex: number, field: keyof SpecificationItem, value: string) => {
+        setFormData(prev => ({
+            ...prev,
+            specifications: prev.specifications.map((s, si) =>
+                si === sectionIndex
+                    ? { ...s, items: s.items.map((item, ii) => ii === itemIndex ? { ...item, [field]: value } : item) }
+                    : s
+            ),
+        }));
+    };
+
+    const removeSpecificationItem = (sectionIndex: number, itemIndex: number) => {
+        setFormData(prev => ({
+            ...prev,
+            specifications: prev.specifications.map((s, si) =>
+                si === sectionIndex
+                    ? { ...s, items: s.items.filter((_, ii) => ii !== itemIndex) }
+                    : s
+            ),
+        }));
+    };
+
     const handleSubmit = async () => {
         setSaving(true);
         setError(null);
@@ -504,16 +627,7 @@ const ProductEditPage: React.FC = () => {
         }
     };
 
-    const tabs = [
-        { id: 'basic' as TabType, label: 'Basic Info', icon: Package },
-        { id: 'pricing' as TabType, label: 'Pricing', icon: DollarSign },
-        { id: 'images' as TabType, label: 'Images', icon: ImageIcon },
-        { id: 'variants' as TabType, label: 'Variants', icon: Tags },
-        { id: 'addons' as TabType, label: 'Add-ons', icon: Layers },
-        { id: 'customization' as TabType, label: 'Customization', icon: Sliders },
-        { id: 'tabs' as TabType, label: 'Custom Tabs', icon: FileText },
-        { id: 'seo' as TabType, label: 'SEO', icon: Settings },
-    ];
+
 
     if (loading) {
         return (
@@ -626,6 +740,128 @@ const ProductEditPage: React.FC = () => {
                                         placeholder="Detailed description"
                                     />
                                 </div>
+                                <div className="p-4 bg-neutral-50 rounded-xl space-y-4">
+                                    <h4 className="font-medium text-neutral-700 flex items-center gap-2">
+                                        <Package className="w-4 h-4" /> Shipping Dimensions
+                                    </h4>
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                                        <Input
+                                            label={`Weight (${units.weight})`}
+                                            type="number"
+                                            step="0.01"
+                                            value={formData.weight}
+                                            onChange={(e) => handleInputChange('weight', parseFloat(e.target.value) || 0)}
+                                        />
+                                        <Input
+                                            label={`Length (${units.dimension})`}
+                                            type="number"
+                                            step="0.1"
+                                            value={formData.length}
+                                            onChange={(e) => handleInputChange('length', parseFloat(e.target.value) || 0)}
+                                        />
+                                        <Input
+                                            label={`Breadth (${units.dimension})`}
+                                            type="number"
+                                            step="0.1"
+                                            value={formData.breadth}
+                                            onChange={(e) => handleInputChange('breadth', parseFloat(e.target.value) || 0)}
+                                        />
+                                        <Input
+                                            label={`Height (${units.dimension})`}
+                                            type="number"
+                                            step="0.1"
+                                            value={formData.height}
+                                            onChange={(e) => handleInputChange('height', parseFloat(e.target.value) || 0)}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+
+                        {/* Specifications Tab */}
+                        {activeTab === 'specifications' && (
+                            <div className="p-6">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h3 className="font-medium text-lg text-neutral-900">Product Specifications</h3>
+                                        <p className="text-sm text-neutral-500">Organize technical details into sections (e.g., General, Technical, Dimensions)</p>
+                                    </div>
+                                    <Button onClick={addSpecificationSection} size="sm">
+                                        <Plus className="w-4 h-4 mr-2" /> Add Section
+                                    </Button>
+                                </div>
+
+                                {formData.specifications.length === 0 ? (
+                                    <div className="text-center py-12 text-neutral-500 bg-neutral-50 rounded-xl border-2 border-dashed border-neutral-200">
+                                        <FileText className="w-12 h-12 mx-auto mb-3 opacity-40" />
+                                        <p>No specifications yet. Add a section to get started.</p>
+                                        <Button variant="ghost" size="sm" onClick={addSpecificationSection} className="mt-2">
+                                            Add First Section
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-6">
+                                        {formData.specifications.map((section, sIndex) => (
+                                            <div key={section.id || sIndex} className="border border-neutral-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                                {/* Section Header */}
+                                                <div className="px-4 py-3 bg-neutral-50 border-b border-neutral-200 flex items-center gap-3">
+                                                    <GripVertical className="w-4 h-4 text-neutral-400 cursor-move" />
+                                                    <input
+                                                        value={section.title}
+                                                        onChange={(e) => updateSpecificationSection(sIndex, e.target.value)}
+                                                        className="flex-1 bg-transparent border-none font-medium text-neutral-900 focus:ring-0 p-0 placeholder-neutral-400"
+                                                        placeholder="Section Title (e.g., General Info)"
+                                                    />
+                                                    <button
+                                                        onClick={() => removeSpecificationSection(sIndex)}
+                                                        className="p-1.5 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded"
+                                                        title="Delete Section"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+
+                                                {/* Items List */}
+                                                <div className="p-4 space-y-3">
+                                                    {section.items.map((item, iIndex) => (
+                                                        <div key={iIndex} className="flex items-start gap-3 group">
+                                                            <div className="flex-1 grid grid-cols-2 gap-3">
+                                                                <input
+                                                                    value={item.key}
+                                                                    onChange={(e) => updateSpecificationItem(sIndex, iIndex, 'key', e.target.value)}
+                                                                    className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 bg-neutral-50"
+                                                                    placeholder="Label (e.g., Material)"
+                                                                />
+                                                                <input
+                                                                    value={item.value}
+                                                                    onChange={(e) => updateSpecificationItem(sIndex, iIndex, 'value', e.target.value)}
+                                                                    className="w-full px-3 py-2 text-sm rounded-lg border border-neutral-200 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                                                                    placeholder="Value (e.g., Aluminium)"
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => removeSpecificationItem(sIndex, iIndex)}
+                                                                className="p-2 text-neutral-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                title="Remove Item"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => addSpecificationItem(sIndex)}
+                                                        className="text-primary-600 hover:text-primary-700 hover:bg-primary-50 pl-2"
+                                                    >
+                                                        <Plus className="w-3.5 h-3.5 mr-1.5" /> Add Specification
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -845,6 +1081,49 @@ const ProductEditPage: React.FC = () => {
                                                                             <Plus className="w-5 h-5 text-neutral-400" />
                                                                         </label>
                                                                     )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Shipping Dimensions for Variant */}
+                                                            <div className="pt-3 border-t border-neutral-100 mt-2">
+                                                                <label className="block text-xs font-medium text-neutral-500 mb-2">Shipping Dimensions</label>
+                                                                <div className="grid grid-cols-4 gap-2">
+                                                                    <div>
+                                                                        <input
+                                                                            type="number" step="0.01" placeholder={`Weight (${units.weight})`}
+                                                                            value={variant.weight ?? 0.5}
+                                                                            onChange={(e) => updateVariant(vIndex, 'weight', parseFloat(e.target.value))}
+                                                                            className="w-full px-2 py-1.5 text-sm rounded-lg border border-neutral-200 focus:ring-1 focus:ring-primary-500"
+                                                                            title={`Weight (${units.weight})`}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <input
+                                                                            type="number" step="0.1" placeholder={`L (${units.dimension})`}
+                                                                            value={variant.length ?? 10}
+                                                                            onChange={(e) => updateVariant(vIndex, 'length', parseFloat(e.target.value))}
+                                                                            className="w-full px-2 py-1.5 text-sm rounded-lg border border-neutral-200 focus:ring-1 focus:ring-primary-500"
+                                                                            title={`Length (${units.dimension})`}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <input
+                                                                            type="number" step="0.1" placeholder={`B (${units.dimension})`}
+                                                                            value={variant.breadth ?? 10}
+                                                                            onChange={(e) => updateVariant(vIndex, 'breadth', parseFloat(e.target.value))}
+                                                                            className="w-full px-2 py-1.5 text-sm rounded-lg border border-neutral-200 focus:ring-1 focus:ring-primary-500"
+                                                                            title={`Breadth (${units.dimension})`}
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <input
+                                                                            type="number" step="0.1" placeholder={`H (${units.dimension})`}
+                                                                            value={variant.height ?? 10}
+                                                                            onChange={(e) => updateVariant(vIndex, 'height', parseFloat(e.target.value))}
+                                                                            className="w-full px-2 py-1.5 text-sm rounded-lg border border-neutral-200 focus:ring-1 focus:ring-primary-500"
+                                                                            title={`Height (${units.dimension})`}
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
@@ -1159,8 +1438,8 @@ const ProductEditPage: React.FC = () => {
                         </div>
                     </Card>
                 </div>
-            </div>
-        </AdminLayout>
+            </div >
+        </AdminLayout >
     );
 };
 

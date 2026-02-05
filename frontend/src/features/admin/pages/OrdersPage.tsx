@@ -3,6 +3,9 @@ import { Search, Filter, Eye, ChevronDown } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import { Button, Card, Badge, Pagination, Modal, Select } from '../../../components/ui';
 
+import toast from 'react-hot-toast';
+import { shippingService } from '../../../services/shipping.service';
+
 const OrdersPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -182,18 +185,41 @@ const OrdersPage: React.FC = () => {
 
                         <div className="border-t border-neutral-100 pt-4">
                             <h4 className="font-medium mb-4">Update Status</h4>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map((status) => (
                                     <button
                                         key={status}
                                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${selectedOrder.status === status
-                                                ? 'bg-primary-500 text-white'
-                                                : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                                            ? 'bg-primary-500 text-white'
+                                            : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                                             }`}
                                     >
                                         {status}
                                     </button>
                                 ))}
+                            </div>
+                        </div>
+
+                        <div className="border-t border-neutral-100 pt-4">
+                            <h4 className="font-medium mb-4">Shipping Actions</h4>
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="primary"
+                                    className="w-full flex justify-center items-center gap-2"
+                                    onClick={async () => {
+                                        try {
+                                            toast.loading('Creating shipment...');
+                                            await shippingService.createOrder(selectedOrder);
+                                            toast.dismiss();
+                                            toast.success('Shipment created in Shiprocket!');
+                                        } catch (e: any) {
+                                            toast.dismiss();
+                                            toast.error(e?.response?.data?.message || 'Failed to create shipment');
+                                        }
+                                    }}
+                                >
+                                    <span className="text-lg">🚀</span> Ship with Shiprocket
+                                </Button>
                             </div>
                         </div>
 
