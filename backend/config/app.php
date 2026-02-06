@@ -113,8 +113,12 @@ return [
          * Application Service Providers...
          */
         App\Providers\AppServiceProvider::class,
+        App\Providers\AuthServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         Core\System\SystemServiceProvider::class,
+        App\Providers\RepositoryServiceProvider::class,
+        App\Providers\SettingServiceProvider::class,
+        App\Providers\CartServiceProvider::class,
     ],
 
     /*

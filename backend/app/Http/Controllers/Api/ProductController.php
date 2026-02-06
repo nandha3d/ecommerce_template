@@ -44,24 +44,28 @@ class ProductController extends Controller
             });
         }
 
-        // Price filter
+        // Price filter (Via Variants)
         if ($minPrice = $request->input('min_price')) {
-            $query->where(function ($q) use ($minPrice) {
-                $q->where('sale_price', '>=', $minPrice)
-                  ->orWhere(function ($q2) use ($minPrice) {
-                      $q2->whereNull('sale_price')
-                         ->where('price', '>=', $minPrice);
-                  });
+            $query->whereHas('variants', function ($q) use ($minPrice) {
+                $q->where(function ($sub) use ($minPrice) {
+                    $sub->where('sale_price', '>=', $minPrice)
+                        ->orWhere(function ($sub2) use ($minPrice) {
+                            $sub2->whereNull('sale_price')
+                                 ->where('price', '>=', $minPrice);
+                        });
+                })->where('is_active', true);
             });
         }
 
         if ($maxPrice = $request->input('max_price')) {
-            $query->where(function ($q) use ($maxPrice) {
-                $q->where('sale_price', '<=', $maxPrice)
-                  ->orWhere(function ($q2) use ($maxPrice) {
-                      $q2->whereNull('sale_price')
-                         ->where('price', '<=', $maxPrice);
-                  });
+            $query->whereHas('variants', function ($q) use ($maxPrice) {
+                $q->where(function ($sub) use ($maxPrice) {
+                    $sub->where('sale_price', '<=', $maxPrice)
+                        ->orWhere(function ($sub2) use ($maxPrice) {
+                            $sub2->whereNull('sale_price')
+                                 ->where('price', '<=', $maxPrice);
+                        });
+                })->where('is_active', true);
             });
         }
 
@@ -70,33 +74,37 @@ class ProductController extends Controller
             $query->where('average_rating', '>=', $rating);
         }
 
-        // In stock filter
+        // In stock filter (Via Variants)
         if ($request->boolean('in_stock')) {
-            $query->where('stock_quantity', '>', 0);
+            $query->whereHas('variants', function ($q) {
+                $q->where('stock_quantity', '>', 0)
+                  ->where('is_active', true);
+            });
         }
 
         // Sorting
-        $sortBy = $request->input('sort_by', 'created_at');
-        switch ($sortBy) {
-            case 'popularity':
-                $query->orderBy('review_count', 'desc');
-                break;
-            case 'price_asc':
-                $query->orderByRaw('COALESCE(sale_price, price) ASC');
-                break;
-            case 'price_desc':
-                $query->orderByRaw('COALESCE(sale_price, price) DESC');
-                break;
-            case 'rating':
-                $query->orderBy('average_rating', 'desc');
-                break;
-            case 'newest':
-            default:
-                $query->orderBy('created_at', 'desc');
-                break;
+        $sortConfig = config('sorting.products.options');
+        $sortBy = $request->input('sort_by', config('sorting.products.default', 'newest'));
+
+        if (array_key_exists($sortBy, $sortConfig)) {
+            $config = $sortConfig[$sortBy];
+            if (isset($config['relation_min'])) {
+                 list($relation, $column) = $config['relation_min'];
+                 $query->withMin($relation, $column)->orderBy($config['field'], $config['direction']);
+            } elseif (isset($config['relation_max'])) {
+                 list($relation, $column) = $config['relation_max'];
+                 $query->withMax($relation, $column)->orderBy($config['field'], $config['direction']);
+            } else {
+                 $query->orderBy($config['field'], $config['direction']);
+            }
+        } else {
+             // Fallback
+             $query->orderBy('created_at', 'desc');
         }
 
-        $perPage = min($request->input('per_page', 12), 50);
+        $defaultPerPage = config('pagination.products.default', 12);
+        $maxPerPage = config('pagination.products.max', 50);
+        $perPage = min($request->input('per_page', $defaultPerPage), $maxPerPage);
         $products = $query->paginate($perPage);
 
         return response()->json([
@@ -148,7 +156,7 @@ class ProductController extends Controller
     {
         $products = Product::with(['brand', 'categories', 'images'])
                            ->featured()
-                           ->limit(8)
+                           ->limit(config('pagination.products.featured', 8))
                            ->get();
 
         return response()->json([
@@ -165,7 +173,7 @@ class ProductController extends Controller
         $products = Product::with(['brand', 'categories', 'images'])
                            ->bestSellers()
                            ->orderBy('review_count', 'desc')
-                           ->limit(8)
+                           ->limit(config('pagination.products.bestsellers', 8))
                            ->get();
 
         return response()->json([
@@ -182,7 +190,7 @@ class ProductController extends Controller
         $products = Product::with(['brand', 'categories', 'images'])
                            ->new()
                            ->orderBy('created_at', 'desc')
-                           ->limit(8)
+                           ->limit(config('pagination.products.new_arrivals', 8))
                            ->get();
 
         return response()->json([
@@ -206,7 +214,7 @@ class ProductController extends Controller
                           ->whereHas('categories', function ($q) use ($categoryIds) {
                               $q->whereIn('categories.id', $categoryIds);
                           })
-                          ->limit(4)
+                          ->limit(config('pagination.products.related', 4))
                           ->get();
 
         return response()->json([

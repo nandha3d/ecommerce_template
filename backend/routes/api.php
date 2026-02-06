@@ -43,6 +43,11 @@ Route::get('/test-attributes', function () {
 Route::prefix('v1')->group(function () {
 
     // ============================================
+    // Globalization Context
+    // ============================================
+    Route::get('/context', [App\Http\Controllers\Api\ContextController::class, 'getContext']);
+
+    // ============================================
     // License Routes (Public + Admin)
     // ============================================
     Route::prefix('license')->group(function () {
@@ -98,18 +103,27 @@ Route::prefix('v1')->group(function () {
     // ============================================
     // Cart Routes (Guest + Authenticated)
     // ============================================
-    Route::prefix('cart')->group(function () {
-        Route::get('/', [CartController::class, 'index']);
-        Route::post('/items', [CartController::class, 'addItem']);
-        Route::put('/items/{itemId}', [CartController::class, 'updateItem']);
-        Route::delete('/items/{itemId}', [CartController::class, 'removeItem']);
-        Route::delete('/clear', [CartController::class, 'clear']);
-        Route::post('/coupon', [CartController::class, 'applyCoupon']);
-        Route::delete('/coupon', [CartController::class, 'removeCoupon']);
-        
-        Route::middleware('auth:api')->group(function () {
-            Route::post('/merge', [CartController::class, 'merge']);
+    // ============================================
+    // Cart Routes (Guest + Authenticated)
+    // ============================================
+    Route::prefix('cart')->middleware(['cart.owner'])->group(function () {
+        // Apply General Cart Throttle (30/min) + Ownership Check
+        Route::middleware('throttle:cart')->group(function () {
+            Route::get('/', [CartController::class, 'index']);
+            Route::post('/items', [CartController::class, 'addItem']);
+            Route::put('/items/{itemId}', [CartController::class, 'updateItem']);
+            Route::delete('/items/{itemId}', [CartController::class, 'removeItem']);
+            Route::delete('/clear', [CartController::class, 'clear']);
+            Route::delete('/coupon', [CartController::class, 'removeCoupon']);
+            
+            Route::middleware('auth:api')->group(function () {
+                Route::post('/merge', [CartController::class, 'merge']);
+            });
         });
+
+        // Apply Strict Coupon Throttle (5/min)
+        Route::post('/coupon', [CartController::class, 'applyCoupon'])
+            ->middleware('rate.limit:coupon');
     });
 
     // ============================================
@@ -117,33 +131,37 @@ Route::prefix('v1')->group(function () {
     // ============================================
     Route::middleware('auth:api')->prefix('orders')->group(function () {
         Route::get('/', [OrderController::class, 'index']);
-        Route::post('/', [OrderController::class, 'store']);
+        // Rate limited order creation (3/min) to prevent abuse
+        Route::post('/', [OrderController::class, 'store'])->middleware('rate.limit:order');
         Route::get('/{id}', [OrderController::class, 'show']);
         Route::get('/number/{orderNumber}', [OrderController::class, 'showByNumber']);
         Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
     });
 
     // ============================================
-    // Address Routes (Authenticated) - TODO: Implement AddressController
+    // Address Routes (Authenticated)
     // ============================================
-    // Route::middleware('auth:api')->prefix('addresses')->group(function () {
-    //     Route::get('/', 'AddressController@index');
-    //     Route::post('/', 'AddressController@store');
-    //     Route::get('/{id}', 'AddressController@show');
-    //     Route::put('/{id}', 'AddressController@update');
-    //     Route::delete('/{id}', 'AddressController@destroy');
-    //     Route::post('/{id}/default', 'AddressController@setDefault');
-    // });
+    Route::middleware('auth:api')->prefix('addresses')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\AddressController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\Api\AddressController::class, 'store']);
+        Route::get('/{id}', [\App\Http\Controllers\Api\AddressController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\Api\AddressController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\Api\AddressController::class, 'destroy']);
+        Route::post('/{id}/default', [\App\Http\Controllers\Api\AddressController::class, 'setDefault']);
+    });
 
     // ============================================
     // Wishlist Routes (Authenticated) - TODO: Implement WishlistController
     // ============================================
-    // Route::middleware('auth:api')->prefix('wishlist')->group(function () {
-    //     Route::get('/', 'WishlistController@index');
-    //     Route::post('/{productId}', 'WishlistController@add');
-    //     Route::delete('/{productId}', 'WishlistController@remove');
-    //     Route::get('/check/{productId}', 'WishlistController@check');
-    // });
+    // ============================================
+    // Wishlist Routes (Authenticated)
+    // ============================================
+    Route::middleware('auth:api')->prefix('wishlist')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\WishlistController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\Api\WishlistController::class, 'store']); // Changed from /{productId} to root with body
+        Route::delete('/{productId}', [\App\Http\Controllers\Api\WishlistController::class, 'destroy']);
+        Route::get('/check/{productId}', [\App\Http\Controllers\Api\WishlistController::class, 'check']);
+    });
 
     // ============================================
     // Review Routes - TODO: Implement ReviewController
@@ -159,7 +177,52 @@ Route::prefix('v1')->group(function () {
     // });
 
     // ============================================
-    // Admin Routes - TODO: Implement Admin Controllers
+    // Globalization Routes (Public)
+    // ============================================
+    Route::prefix('settings')->group(function () {
+        // Currencies
+        Route::get('/currencies', [App\Http\Controllers\Api\CurrencyController::class, 'index']);
+        Route::post('/currency/switch', [App\Http\Controllers\Api\CurrencyController::class, 'switch']);
+        
+        // Timezones
+        Route::get('/timezones', [App\Http\Controllers\Api\TimezoneController::class, 'index']);
+        Route::post('/timezone/switch', [App\Http\Controllers\Api\TimezoneController::class, 'switch']);
+    });
+
+    // ============================================
+    // Admin Routes
+    // ============================================
+    // TODO: Wrap in Admin Middleware if not already global for this section, 
+    // but here we just grouped under v1. Usually Admin is `Route::middleware(['auth:api', 'admin'])`
+    // For now we add the definitions.
+    
+    Route::prefix('admin')->group(function () {
+         
+        // Globalization Admin
+        Route::prefix('currencies')->group(function () {
+            Route::get('/', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'index']);
+            Route::post('/', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'store']);
+            Route::post('/{id}/toggle', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'toggleActive']);
+            Route::post('/{id}/default', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'setDefault']);
+            Route::put('/{id}', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'update']);
+            Route::delete('/{id}', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'destroy']);
+        });
+
+        Route::prefix('timezones')->group(function () {
+            Route::get('/', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'index']);
+            Route::get('/identifiers', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'validIdentifiers']);
+            Route::post('/', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'store']);
+            Route::post('/{id}/toggle', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'toggleActive']);
+            Route::post('/{id}/default', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'setDefault']);
+            Route::put('/{id}', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'update']);
+            Route::delete('/{id}', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'destroy']);
+        });
+
+    });
+
+    // ============================================
+    // Admin Routes - Legacy Placeholder or other admin routes
+
     // ============================================
     // Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
     //     // Dashboard
@@ -205,6 +268,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/', [ModuleController::class, 'index']);
         Route::post('/{slug}/toggle', [ModuleController::class, 'toggle']);
         Route::put('/{slug}/config', [ModuleController::class, 'updateConfig']);
+        
+        // Shipping Specific Routes
+        Route::post('/shipping/shiprocket/config', [\App\Http\Controllers\Api\ShippingController::class, 'updateConfig']);
+        Route::get('/shipping/shiprocket/test', [\App\Http\Controllers\Api\ShippingController::class, 'testConnection']);
+        Route::post('/shipping/shiprocket/orders', [\App\Http\Controllers\Api\ShippingController::class, 'createShipment']);
     });
 
     // ============================================
@@ -272,7 +340,9 @@ Route::prefix('v1')->group(function () {
     });
     
     Route::post('/payment/verify', [PaymentController::class, 'verify']);
+    Route::post('/payment/verify', [PaymentController::class, 'verify']);
     Route::post('/payment/failed', [PaymentController::class, 'failed']);
+    Route::post('/payment/webhook', [PaymentController::class, 'handleWebhook']);
     
     Route::middleware(['auth:api', 'admin'])->prefix('admin/payment')->group(function () {
         Route::get('/gateways', [PaymentController::class, 'index']);

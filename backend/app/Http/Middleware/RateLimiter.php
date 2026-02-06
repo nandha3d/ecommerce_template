@@ -13,17 +13,28 @@ use Symfony\Component\HttpFoundation\Response;
  * 
  * Provides different rate limits for different API endpoints:
  * - Auth endpoints: 5 requests per minute (login, register)
+ * - Cart: 30 requests per minute (add/update/remove items)
  * - Checkout: 10 requests per minute
+ * - Order: 3 requests per minute (order creation)
  * - General API: 60 requests per minute
  */
 class RateLimiter
 {
-    protected array $limits = [
-        'auth' => ['attempts' => 5, 'decay' => 60],      // 5/min for auth
-        'checkout' => ['attempts' => 10, 'decay' => 60], // 10/min for checkout
-        'api' => ['attempts' => 60, 'decay' => 60],      // 60/min general
-        'search' => ['attempts' => 30, 'decay' => 60],   // 30/min for search
-    ];
+    protected array $limits = [];
+
+    public function __construct()
+    {
+        $this->limits = config('rate_limits', [
+            'auth' => ['attempts' => 5, 'decay' => 60],
+            'checkout' => ['attempts' => 10, 'decay' => 60],
+            'api' => ['attempts' => 60, 'decay' => 60],
+            'search' => ['attempts' => 30, 'decay' => 60],
+            'cart' => ['attempts' => 30, 'decay' => 60],
+            'order' => ['attempts' => 3, 'decay' => 60],
+            'coupon' => ['attempts' => 5, 'decay' => 60],
+            'payment' => ['attempts' => 10, 'decay_minutes' => 5],
+        ]);
+    }
 
     public function handle(Request $request, Closure $next, string $type = 'api'): Response
     {

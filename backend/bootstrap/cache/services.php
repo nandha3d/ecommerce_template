@@ -30,8 +30,12 @@
     26 => 'Spatie\\Permission\\PermissionServiceProvider',
     27 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
     28 => 'App\\Providers\\AppServiceProvider',
-    29 => 'App\\Providers\\RouteServiceProvider',
-    30 => 'Core\\System\\SystemServiceProvider',
+    29 => 'App\\Providers\\AuthServiceProvider',
+    30 => 'App\\Providers\\RouteServiceProvider',
+    31 => 'Core\\System\\SystemServiceProvider',
+    32 => 'App\\Providers\\RepositoryServiceProvider',
+    33 => 'App\\Providers\\SettingServiceProvider',
+    34 => 'App\\Providers\\CartServiceProvider',
   ),
   'eager' => 
   array (
@@ -52,8 +56,12 @@
     14 => 'Spatie\\Permission\\PermissionServiceProvider',
     15 => 'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
     16 => 'App\\Providers\\AppServiceProvider',
-    17 => 'App\\Providers\\RouteServiceProvider',
-    18 => 'Core\\System\\SystemServiceProvider',
+    17 => 'App\\Providers\\AuthServiceProvider',
+    18 => 'App\\Providers\\RouteServiceProvider',
+    19 => 'Core\\System\\SystemServiceProvider',
+    20 => 'App\\Providers\\RepositoryServiceProvider',
+    21 => 'App\\Providers\\SettingServiceProvider',
+    22 => 'App\\Providers\\CartServiceProvider',
   ),
   'deferred' => 
   array (

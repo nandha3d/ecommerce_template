@@ -31,7 +31,7 @@ class CartController extends Controller
         return response()->json([
             'success' => true,
             'data' => new CartResource($cart),
-        ]);
+        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -59,7 +59,7 @@ class CartController extends Controller
             'success' => true,
             'message' => 'Item added to cart',
             'data' => new CartResource($cart),
-        ]);
+        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -82,7 +82,7 @@ class CartController extends Controller
             'success' => true,
             'message' => 'Cart updated',
             'data' => new CartResource($cart),
-        ]);
+        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -101,7 +101,7 @@ class CartController extends Controller
             'success' => true,
             'message' => 'Item removed from cart',
             'data' => new CartResource($cart),
-        ]);
+        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -131,37 +131,38 @@ class CartController extends Controller
                         ->where('is_active', true)
                         ->first();
 
+        $genericError = [
+            'success' => false,
+            'message' => 'This coupon code cannot be applied to your order.',
+        ];
+
+        // Audit Requirement: Prevent Enumeration
+        // We check all conditions but return the SAME error message.
+        // We also log the specific failure for admin debugging.
+
         if (!$coupon) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid coupon code',
-            ], 400);
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Not found", ['code' => $request->input('code')]);
+            return response()->json($genericError, 400);
         }
 
         // Check if expired
         if ($coupon->expires_at && $coupon->expires_at->isPast()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Coupon has expired',
-            ], 400);
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Expired", ['code' => $request->input('code')]);
+            return response()->json($genericError, 400);
         }
 
         // Check usage limit
         if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Coupon usage limit reached',
-            ], 400);
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Usage Limit", ['code' => $request->input('code')]);
+            return response()->json($genericError, 400);
         }
 
         $cart = $this->getOrCreateCart($request);
 
         // Check minimum order amount
         if ($coupon->min_order_amount && $cart->subtotal < $coupon->min_order_amount) {
-            return response()->json([
-                'success' => false,
-                'message' => "Minimum order amount of \${$coupon->min_order_amount} required",
-            ], 400);
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Min Order Amount", ['code' => $request->input('code')]);
+            return response()->json($genericError, 400);
         }
 
         $cart->coupon_id = $coupon->id;
@@ -173,7 +174,7 @@ class CartController extends Controller
             'success' => true,
             'message' => 'Coupon applied successfully',
             'data' => new CartResource($cart),
-        ]);
+        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -191,7 +192,7 @@ class CartController extends Controller
             'success' => true,
             'message' => 'Coupon removed',
             'data' => new CartResource($cart),
-        ]);
+        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -207,7 +208,12 @@ class CartController extends Controller
         }
 
         $request->validate([
-            'guest_cart_id' => 'required|string',
+            'guest_cart_id' => [
+                'required',
+                'string',
+                'regex:/^(cart_|guest_)[a-zA-Z0-9]{20,64}$/',
+                'max:100'
+            ],
         ]);
 
         $guestCart = Cart::where('session_id', $request->input('guest_cart_id'))->first();
@@ -228,24 +234,81 @@ class CartController extends Controller
             'success' => true,
             'message' => 'Carts merged successfully',
             'data' => new CartResource($userCart),
-        ]);
+        ])->header('X-Cart-Session', $userCart->session_id);
     }
 
     /**
      * Get or create cart for current user/session.
+     * 
+     * SECURITY: Validates cart ownership to prevent IDOR attacks.
      */
     private function getOrCreateCart(Request $request): Cart
     {
-        if (auth()->check()) {
-            return Cart::firstOrCreate(['user_id' => auth()->id()]);
-        }
-
+        $userId = auth('api')->id();
         $sessionId = $request->header('X-Cart-Session') ?? $request->input('session_id');
-        
-        if (!$sessionId) {
-            $sessionId = uniqid('cart_', true);
+
+        // ALWAYS ensure we have a session ID for guest users
+        if (!$userId && !$sessionId) {
+            // Generate new session ID and return in response header
+            $sessionId = 'guest_' . bin2hex(random_bytes(16)); // Cryptographically secure
+            
+            \Illuminate\Support\Facades\Log::warning('Cart request without X-Cart-Session header', [
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
         }
 
-        return Cart::firstOrCreate(['session_id' => $sessionId]);
+        // Validate session ID format
+        if ($sessionId && !preg_match('/^(cart_|guest_)[a-f0-9]{32,64}$/', $sessionId)) {
+            \Illuminate\Support\Facades\Log::warning('Invalid cart session ID format', [
+                'session_id' => $sessionId,
+                'ip' => $request->ip(),
+            ]);
+            // Regenerate valid session ID if invalid
+            $sessionId = 'guest_' . bin2hex(random_bytes(16));
+        }
+
+        $cart = $this->cartService->getCart($userId, $sessionId);
+
+        // Update session ID if it was generated/regenerated and cart is new or matches
+        // Ideally CartService creates it with this ID.
+
+        // SECURITY: Ownership validation
+        if ($userId && $cart->user_id && $cart->user_id !== $userId) {
+            \Illuminate\Support\Facades\Log::warning('Cart ownership mismatch', [
+                'cart_id' => $cart->id,
+                'cart_user_id' => $cart->user_id,
+                'request_user_id' => $userId,
+                'ip' => $request->ip(),
+            ]);
+            abort(403, 'Access denied');
+        }
+
+        // If guest request, verify session matches
+        if (!$userId && $cart->session_id && $cart->session_id !== $sessionId) {
+            // If cart exists but session differs, it might be an orphaned cart or collision.
+            // But since getCart uses sessionId to find it, this branch essentially catches
+            // if getCart found something by ID but the returned object has different ID (impossible)
+            // or if we passed ID A, and it returned Cart B (userId based?).
+            
+            // If we are guest, we only look by session ID.
+            
+             \Illuminate\Support\Facades\Log::warning('Cart session mismatch', [
+                'cart_id' => $cart->id,
+                'cart_session' => $cart->session_id,
+                'request_session' => $sessionId,
+                'ip' => $request->ip(),
+            ]);
+             // Don't abort yet, maybe just accept the new cart.
+             // But let's follow the strict plan.
+             abort(403, 'Access denied');
+        }
+        
+        // Ensure the cart object carries the session ID we intend to use, 
+        // effectively "attaching" the session ID to the instance for later response header injection
+        // (Though strictly, we need to manually pass it to response functions unless we store it on request or similar)
+        // For now, we rely on $cart->session_id being populated from DB.
+        
+        return $cart;
     }
 }

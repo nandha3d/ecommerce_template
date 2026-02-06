@@ -5,6 +5,7 @@ import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
 import { setCartOpen, updateCartItem, removeFromCart } from '../../store/slices/cartSlice';
 import { getImageUrl } from '../../utils/imageUtils';
 import { Button, Loader } from '../ui';
+import { PriceDisplay } from '../common/PriceDisplay';
 
 const CartDrawer: React.FC = () => {
     const dispatch = useAppDispatch();
@@ -125,7 +126,7 @@ const CartDrawer: React.FC = () => {
                                                 </button>
                                             </div>
                                             <span className="font-bold text-primary-900">
-                                                ${(item.total_price || 0).toFixed(2)}
+                                                <PriceDisplay amountInBase={item.total_price} />
                                             </span>
                                         </div>
                                     </div>
@@ -150,21 +151,21 @@ const CartDrawer: React.FC = () => {
                         <div className="space-y-2">
                             <div className="flex justify-between text-neutral-600">
                                 <span>Subtotal</span>
-                                <span>${(cart.subtotal || 0).toFixed(2)}</span>
+                                <span><PriceDisplay amountInBase={cart.subtotal} /></span>
                             </div>
                             {cart.discount > 0 && (
                                 <div className="flex justify-between text-success">
                                     <span>Discount</span>
-                                    <span>-${(cart.discount || 0).toFixed(2)}</span>
+                                    <span>-<PriceDisplay amountInBase={cart.discount} /></span>
                                 </div>
                             )}
                             <div className="flex justify-between text-neutral-600">
                                 <span>Shipping</span>
-                                <span>{cart.shipping === 0 ? 'Free' : `$${(cart.shipping || 0).toFixed(2)}`}</span>
+                                <span>{cart.shipping === 0 ? 'Free' : <PriceDisplay amountInBase={cart.shipping} />}</span>
                             </div>
                             <div className="flex justify-between text-lg font-bold text-primary-900 pt-2 border-t border-neutral-100">
                                 <span>Total</span>
-                                <span>${(cart.total || 0).toFixed(2)}</span>
+                                <span><PriceDisplay amountInBase={cart.total} /></span>
                             </div>
                         </div>
 

@@ -8,6 +8,7 @@ import { Button, Input, Loader } from '../../components/ui';
 import { getImageUrl } from '../../utils/imageUtils';
 import { SEO } from '../../components/common/SEO';
 import toast from 'react-hot-toast';
+import { PriceDisplay } from '../../components/common/PriceDisplay';
 
 const CartPage: React.FC = () => {
     const dispatch = useAppDispatch();
@@ -173,10 +174,10 @@ const CartPage: React.FC = () => {
                                 {/* Price */}
                                 <div className="text-right">
                                     <p className="text-lg font-bold text-primary-900">
-                                        ${(item.total_price || 0).toFixed(2)}
+                                        <PriceDisplay amountInBase={item.total_price} />
                                     </p>
-                                    <p className="text-sm text-neutral-500">
-                                        ${(item.unit_price || 0).toFixed(2)} each
+                                    <p className="text-sm text-neutral-500 flex items-center justify-end gap-1">
+                                        <PriceDisplay amountInBase={item.unit_price} /> each
                                     </p>
                                 </div>
                             </div>
@@ -238,31 +239,36 @@ const CartPage: React.FC = () => {
                     )}
                 </div>
 
-                {/* Totals */}
+                {/* TC: Totals Section using Strict Backend Data */}
                 <div className="space-y-3 pb-6 border-b border-neutral-100">
                     <div className="flex justify-between text-neutral-600">
                         <span>Subtotal</span>
-                        <span>${(cartData.subtotal || 0).toFixed(2)}</span>
+                        <span><PriceDisplay amountInBase={cartData.subtotal} /></span>
                     </div>
                     {cartData.discount > 0 && (
                         <div className="flex justify-between text-success">
                             <span>Discount</span>
-                            <span>-${(cartData.discount || 0).toFixed(2)}</span>
+                            <span>-<PriceDisplay amountInBase={cartData.discount} /></span>
                         </div>
                     )}
                     <div className="flex justify-between text-neutral-600">
                         <span>Shipping</span>
-                        <span>{cartData.shipping === 0 ? 'Free' : `$${(cartData.shipping || 0).toFixed(2)}`}</span>
+                        <span>
+                            {cartData.shipping === 0
+                                ? 'Free'
+                                : <PriceDisplay amountInBase={cartData.shipping} />
+                            }
+                        </span>
                     </div>
                     <div className="flex justify-between text-neutral-600">
                         <span>Tax</span>
-                        <span>${(cartData.tax || 0).toFixed(2)}</span>
+                        <span><PriceDisplay amountInBase={cartData.tax} /></span>
                     </div>
                 </div>
 
                 <div className="flex justify-between text-xl font-bold text-primary-900 py-4">
                     <span>Total</span>
-                    <span>${(cartData.total || 0).toFixed(2)}</span>
+                    <span><PriceDisplay amountInBase={cartData.total} /></span>
                 </div>
 
                 {/* Checkout Button */}

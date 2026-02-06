@@ -20,15 +20,18 @@ class LicenseManager
      */
     protected string $secretKey;
 
-    /**
-     * Cache duration for license validation (in seconds)
-     */
-    protected int $cacheDuration = 86400; // 24 hours
+    private ConfigurationService $config;
 
-    public function __construct()
+    public function __construct(ConfigurationService $config)
     {
+        $this->config = $config;
         $this->portalUrl = config('supplepro.license_portal_url', 'https://license.animazon.in/api');
         $this->secretKey = config('supplepro.license_secret_key', '');
+    }
+
+    protected function getCacheDuration(): int
+    {
+        return $this->config->getInt('license.cache_duration', 86400);
     }
 
     /**
@@ -226,7 +229,7 @@ class LicenseManager
      */
     public function getLicense(): ?License
     {
-        return Cache::remember('supplepro_license', $this->cacheDuration, function () {
+        return Cache::remember('supplepro_license', $this->getCacheDuration(), function () {
             return License::first();
         });
     }

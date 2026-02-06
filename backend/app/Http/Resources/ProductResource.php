@@ -14,23 +14,31 @@ class ProductResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        // Resolve Price/Stock from Default Variant (or First Variant)
+        // This ensures compatibility with "Simple Product" frontend logic
+        $defaultVariant = $this->variants->sortBy('sort_order')->first();
+        
+        $price = $defaultVariant ? $defaultVariant->price : ($this->price ?? 0);
+        $salePrice = $defaultVariant ? $defaultVariant->sale_price : ($this->sale_price ?? null);
+        $stockQuantity = $defaultVariant ? $defaultVariant->stock_quantity : ($this->stock_quantity ?? 0);
+
         return [
             'id' => $this->id,
             'name' => $this->name,
             'slug' => $this->slug,
             'description' => $this->description,
             'short_description' => $this->short_description,
-            'price' => (float) $this->price,
-            'sale_price' => $this->sale_price > 0 ? (float) $this->sale_price : null,
-            'effective_price' => (float) ($this->sale_price > 0 ? $this->sale_price : $this->price),
-            'is_on_sale' => $this->sale_price > 0 && $this->sale_price < $this->price,
-            'discount_percent' => $this->sale_price > 0 && $this->price > 0 
-                ? round((($this->price - $this->sale_price) / $this->price) * 100) 
+            'price' => (float) $price,
+            'sale_price' => $salePrice > 0 ? (float) $salePrice : null,
+            'effective_price' => (float) ($salePrice > 0 ? $salePrice : $price),
+            'is_on_sale' => $salePrice > 0 && $salePrice < $price,
+            'discount_percent' => $salePrice > 0 && $price > 0 
+                ? round((($price - $salePrice) / $price) * 100) 
                 : 0,
-            'sku' => $this->sku,
-            'stock_quantity' => $this->stock_quantity,
-            'in_stock' => $this->stock_quantity > 0,
-            'stock_status' => $this->stock_quantity > 10 ? 'in_stock' : ($this->stock_quantity > 0 ? 'low_stock' : 'out_of_stock'),
+            'sku' => $defaultVariant ? $defaultVariant->sku : $this->sku,
+            'stock_quantity' => $stockQuantity,
+            'in_stock' => $stockQuantity > 0, // Simplified stock check
+            'stock_status' => $stockQuantity > 10 ? 'in_stock' : ($stockQuantity > 0 ? 'low_stock' : 'out_of_stock'),
             'brand' => $this->whenLoaded('brand', function () {
                 return [
                     'id' => $this->brand->id,
@@ -69,6 +77,8 @@ class ProductResource extends JsonResource
                     'in_stock' => $v->stock_quantity > 0,
                     'attributes' => $v->attributes,
                     'image' => $v->image,
+                    'discount_percent' => $v->discount_percent,
+                    'effective_price' => (float) $v->effective_price, // Uses accessor from model
                 ]);
             }),
             'average_rating' => (float) ($this->average_rating ?? 0),

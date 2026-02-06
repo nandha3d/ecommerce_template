@@ -1,0 +1,18 @@
+
+   INFO  Running migrations.  
+
+  2026_02_06_000000_update_schema_for_ultra_premium_engine  60ms FAIL
+
+In Connection.php line 829:
+                                                                      
+  SQLSTATE[42000]: Syntax error or access violation: 1061 Duplicate   
+  key name 'carts_expires_at_index' (Connection: mysql, SQL: alter t  
+  able `carts` add index `carts_expires_at_index`(`expires_at`))      
+                                                                      
+
+In Connection.php line 587:
+                                                                      
+  SQLSTATE[42000]: Syntax error or access violation: 1061 Duplicate   
+  key name 'carts_expires_at_index'                                   
+                                                                      
+

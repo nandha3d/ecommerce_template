@@ -117,10 +117,12 @@ class ShippingController extends Controller
                 'billing_address' => 'Test Address',
                 'billing_city' => 'Test City',
                 'billing_pincode' => '110001',
-                'billing_state' => 'New Delhi',
+                'billing_state' => 'New Delhi', // TODO: Map strictly from order
                 'billing_country' => 'India',
-                'billing_email' => $orderData['email'] ?? 'test@example.com',
-                'billing_phone' => '9876543210',
+                // CRITICAL FIX: Removed hardcoded fallback 'test@example.com'
+                // We MUST have a valid email for the shipment.
+                'billing_email' => $orderData['email'] ?? throw new \InvalidArgumentException("Billing email is required for shipment creation."),
+                'billing_phone' => $orderData['phone'] ?? '9876543210', // TODO: Enforce phone
                 'shipping_is_billing' => true,
                 'order_items' => [
                     [

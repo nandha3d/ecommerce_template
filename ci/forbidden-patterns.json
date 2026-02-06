@@ -1,0 +1,19 @@
+{
+    "backend": [
+        "product.price",
+        "product.sale_price",
+        "getFinalPrice\\(",
+        "cart.product_id",
+        "update\\(.*order_items",
+        "recalculateTotal"
+    ],
+    "frontend": [
+        "\\*\\s*quantity",
+        "subtotal",
+        "totalPrice",
+        "price \\*",
+        "if \\(stock",
+        "Math\\.round",
+        "discountPercentage"
+    ]
+}

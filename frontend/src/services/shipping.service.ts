@@ -4,6 +4,7 @@ export interface ShippingConfig {
     email: string;
     password: string;
     pickup_location?: string;
+    channel_id?: string;
 }
 
 class ShippingService {

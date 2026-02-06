@@ -20,7 +20,11 @@ class CartItemResource extends JsonResource
             if ($this->variant_id && $this->relationLoaded('variant') && $this->variant) {
                 $unitPrice = (float) ($this->variant->sale_price > 0 ? $this->variant->sale_price : $this->variant->price);
             } elseif ($this->relationLoaded('product') && $this->product) {
-                $unitPrice = (float) ($this->product->sale_price > 0 ? $this->product->sale_price : $this->product->price);
+                 // Try to find default variant if not linked
+                 $defaultVariant = $this->product->variants->first();
+                 if ($defaultVariant) {
+                     $unitPrice = (float) ($defaultVariant->sale_price > 0 ? $defaultVariant->sale_price : $defaultVariant->price);
+                 }
             }
         }
 

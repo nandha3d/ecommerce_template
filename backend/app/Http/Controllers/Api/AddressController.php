@@ -6,9 +6,17 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Address;
 use Illuminate\Support\Facades\Auth;
+use App\Services\AddressValidationService;
 
 class AddressController extends Controller
 {
+    protected AddressValidationService $validationService;
+
+    public function __construct(AddressValidationService $validationService)
+    {
+        $this->validationService = $validationService;
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -39,6 +47,19 @@ class AddressController extends Controller
             'country' => 'required|string|max:100',
             'is_default' => 'boolean'
         ]);
+
+        // Enhanced Validation
+        $validationResult = $this->validationService->validate($validated);
+        if (!$validationResult['isValid']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validationResult['errors']
+            ], 422);
+        }
+        
+        // Use normalized data
+        $validated = $validationResult['normalizedData'];
 
         $user = Auth::user();
 

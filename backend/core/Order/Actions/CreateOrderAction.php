@@ -10,32 +10,33 @@ use App\Models\Cart;
 use Core\Base\Events\EventBus;
 use Core\Order\Events\OrderCreated;
 use Core\Cart\Services\CartService;
-use Core\Cart\Services\CartPricingService;
+
 use Illuminate\Support\Facades\DB;
 
 class CreateOrderAction
 {
     private EventBus $eventBus;
     private CartService $cartService;
-    private CartPricingService $pricingService;
-
     public function __construct(
         EventBus $eventBus, 
-        CartService $cartService,
-        CartPricingService $pricingService
+        CartService $cartService
     )
     {
         $this->eventBus = $eventBus;
         $this->cartService = $cartService;
-        $this->pricingService = $pricingService;
     }
 
-    public function execute(User $user, Cart $cart, array $data): Order
+    public function execute(User $user, Cart $cart, array $data, ?\App\Models\CheckoutSession $session = null): Order
     {
+        // STRICT RULE: Snapshot Required
+        if (!$session) {
+            throw new \LogicException("Order creation requires a valid CheckoutSession snapshot.");
+        }
+
         $billingAddressId = $data['billing_address_id'] ?? null;
         $shippingAddressId = $data['shipping_address_id'] ?? null;
 
-        // Handle Addresses
+        // Handle Addresses (Address creation is allowed, assumed validated by request)
         if (isset($data['billing_address'])) {
             $billingAddress = Address::create([
                 'user_id' => $user->id,
@@ -56,58 +57,57 @@ class CreateOrderAction
             $shippingAddressId = $shippingAddress->id;
         }
 
-        // Calculate Totals using PricingService
-        $subtotal = $this->pricingService->getSubtotal($cart);
-        $discount = $this->pricingService->getDiscount($cart);
-        $shipping = $this->pricingService->getShipping($cart);
-        $tax = $this->pricingService->getTax($cart);
-        $total = $this->pricingService->getTotal($cart);
-
-        // Create Order
+        // Create Order using SNAPSHOT strictly
+        // Do NOT read from Cart for financials
+        
         $order = Order::create([
             'user_id' => $user->id,
-            'status' => Order::STATUS_PENDING,
-            'payment_status' => ($data['payment_method'] ?? 'card') === 'cod' 
-                ? Order::PAYMENT_PENDING 
-                : Order::PAYMENT_PAID,
-            'payment_method' => $data['payment_method'] ?? 'card',
+            'status' => \App\Enums\OrderState::PENDING,
+            'payment_status' => \App\Enums\OrderState::PAYMENT_PENDING, // Always starts pending (Strict Rule 2)
+            'payment_method' => $data['payment_method'] ?? 'card', // Should validate vs snapshot payment_method_id?
             'billing_address_id' => $billingAddressId,
             'shipping_address_id' => $shippingAddressId,
-            'subtotal' => $subtotal,
-            'discount' => $discount,
-            'shipping' => $shipping,
-            'tax' => $tax,
-            'total' => $total,
-            'coupon_id' => $cart->coupon_id,
+            'subtotal' => $session->subtotal,
+            'discount' => $session->discount,
+            'shipping' => $session->shipping_cost,
+            'tax' => $session->tax_amount,
+            'total' => $session->total, 
+            'currency' => $session->currency ?? 'JPY', // Hardcode default if missing, or USD
+            'coupon_id' => $session->data['coupon_id'] ?? null,
             'notes' => $data['notes'] ?? null,
+            'idempotency_key' => $data['idempotency_key'] ?? null,
+            // 'checkout_session_id' => $session->id, // Ideally link back
         ]);
 
-        // Order Items
-        foreach ($cart->items as $cartItem) {
+        // Order Items Snapshot from Session Data
+        $itemsData = $session->data['items'] ?? [];
+        if (empty($itemsData)) {
+            // Fallback? NO. Strict Mode.
+            throw new \LogicException("CheckoutSession snapshot is missing items data.");
+        }
+
+        foreach ($itemsData as $itemSnapshot) {
             OrderItem::create([
                 'order_id' => $order->id,
-                'product_id' => $cartItem->product_id,
-                'variant_id' => $cartItem->variant_id,
-                'product_name' => $cartItem->product->name,
-                'variant_name' => $cartItem->variant?->name,
-                'sku' => $cartItem->variant?->sku ?? $cartItem->product->sku,
-                'quantity' => $cartItem->quantity,
-                'unit_price' => $cartItem->unit_price,
-                'total_price' => $cartItem->total_price,
-                'image' => $cartItem->product->images->first()?->url,
+                'product_id' => $itemSnapshot['product_id'],
+                'variant_id' => $itemSnapshot['variant_id'],
+                'product_name' => $itemSnapshot['product_name'],
+                'variant_name' => $itemSnapshot['variant_name'],
+                'sku' => $itemSnapshot['sku'], // Snapshot SKU
+                'quantity' => $itemSnapshot['quantity'],
+                'unit_price' => $itemSnapshot['unit_price'], // Stored Price
+                'total_price' => $itemSnapshot['total'],     // Stored Total
+                'image' => $itemSnapshot['image'] ?? null,
             ]);
         }
 
-        // Dispatch Order Created Event (Trigger Inventory Deduction)
+        // Dispatch Order Created Event
         $this->eventBus->dispatch(new OrderCreated($order));
 
-        // Coupon Usage
-        if ($cart->coupon) {
-            $cart->coupon->increment('used_count');
+        // Coupon Usage increment (still touch usage stats, is OK)
+        if ($session->data['coupon_id']) {
+            \App\Models\Coupon::where('id', $session->data['coupon_id'])->increment('used_count');
         }
-
-        // Clear Cart
-        $this->cartService->clear($cart);
 
         return $order;
     }

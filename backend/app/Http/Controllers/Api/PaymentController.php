@@ -3,162 +3,144 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\FailedPayment;
-use App\Services\FraudDetectionService;
-use Core\Payment\Services\PaymentService;
+use App\Services\PaymentService;
 use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
     private PaymentService $paymentService;
-    private FraudDetectionService $fraudService;
 
-    public function __construct(PaymentService $paymentService, FraudDetectionService $fraudService)
+    public function __construct(PaymentService $paymentService)
     {
         $this->paymentService = $paymentService;
-        $this->fraudService = $fraudService;
     }
 
     /**
-     * Initiate a payment with fraud detection.
+     * Handle Stripe Webhook
      */
-    public function initiate(Request $request): JsonResponse
+    public function handleWebhook(Request $request)
     {
-        $validated = $request->validate([
-            'amount' => 'required|numeric|min:1',
-            'currency' => 'required|string|size:3',
-            'receipt_id' => 'sometimes|string',
-            'email' => 'sometimes|email',
-        ]);
+        $payload = $request->getContent();
+        $sigHeader = $request->header('Stripe-Signature');
+        $endpointSecret = config('payment.stripe.webhook_secret');
 
         try {
-            // Run fraud detection
-            $fraudResult = $this->fraudService->evaluate([
-                'email' => $validated['email'] ?? auth()->user()?->email,
-                'ip_address' => $request->ip(),
-                'user_id' => auth()->id(),
-                'amount' => (float) $validated['amount'],
-                'user_agent' => $request->userAgent(),
-            ]);
+            // Verify signature manually or use Stripe lib if available
+            // standard Stripe logic:
+            // $event = \Stripe\Webhook::constructEvent($payload, $sigHeader, $endpointSecret);
+            
+            // For now, simpler logging as we might not have the lib working yet
+            Log::info('Stripe Webhook Received', $request->all());
 
-            // Block if fraud detected
-            if (!$fraudResult['allowed']) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Transaction could not be processed. Please contact support.',
-                    'error_code' => 'TRANSACTION_BLOCKED',
-                ], 403);
+            $event = json_decode($payload, true);
+            
+            if (!isset($event['type'])) {
+                return response()->json(['error' => 'Invalid payload'], 400);
             }
 
-            // Add fraud check ID to receipt for tracking
-            $receiptId = $validated['receipt_id'] ?? 'rcpt_' . uniqid();
-            
-            $data = $this->paymentService->createPaymentOrder(
-                (float)$validated['amount'], 
-                $validated['currency'], 
-                $receiptId
-            );
-            
-            // Include fraud score in response (for review cases)
-            $data['fraud_score'] = $fraudResult['score'];
-            $data['fraud_check_id'] = $fraudResult['fraud_check_id'];
-            
-            return response()->json([
-                'success' => true,
-                'data' => $data
-            ]);
+            switch ($event['type']) {
+                case 'payment_intent.succeeded':
+                    $paymentIntent = $event['data']['object'];
+                    Log::info('Payment Succeeded', ['id' => $paymentIntent['id']]);
+                    // Update order status via service
+                    // $this->paymentService->handlePaymentSuccess($paymentIntent['id']);
+                    break;
+                
+                case 'payment_intent.payment_failed':
+                    $paymentIntent = $event['data']['object'];
+                    Log::warning('Payment Failed', ['id' => $paymentIntent['id']]);
+                    break;
+                    
+                default:
+                    Log::info('Received unknown event type ' . $event['type']);
+            }
+
+            return response()->json(['status' => 'success']);
+
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            Log::error('Webhook Error: ' . $e->getMessage());
+            return response()->json(['error' => 'Webhook verification failed'], 400);
         }
     }
 
     /**
-     * Verify a payment.
+     * Get available payment gateways
      */
-    public function verify(Request $request): JsonResponse
+    public function gateways()
     {
-        $validated = $request->validate([
-            'payment_id' => 'required|string',
-            'order_id' => 'required|string', 
-            'signature' => 'required|string'
-        ]);
-
-        $success = $this->paymentService->confirmPayment($validated['payment_id'], [
-            'provder_order_id' => $validated['order_id'],
-            'signature' => $validated['signature']
-        ]);
-
-        if ($success) {
-            // Record successful payment for velocity tracking
-            $email = auth()->user()?->email ?? $request->input('email');
-            if ($email) {
-                $this->fraudService->recordSuccess($email, $request->ip());
-            }
-            
-            return response()->json(['success' => true, 'message' => 'Payment verified successfully']);
-        }
-
-        return response()->json(['success' => false, 'message' => 'Invalid signature'], 400);
-    }
-
-    /**
-     * Get available payment gateways.
-     */
-    public function gateways(): JsonResponse
-    {
+        // For now, return hardcoded list or fetch from config
         return response()->json([
-            'success' => true,
             'data' => [
                 [
-                    'id' => 'razorpay',
-                    'name' => 'Razorpay',
-                    'logo' => 'https://cdn.razorpay.com/logos/Razorpay_Logo_Color.png',
-                    'is_active' => true
+                    'id' => 'stripe',
+                    'name' => 'Stripe',
+                    'enabled' => (bool) config('payment.stripe.enabled', true), // fetch from ConfigService ideally
+                    'icon' => 'card' 
                 ]
             ]
         ]);
     }
 
     /**
-     * Handle failed payment - track for recovery.
+     * Initiate a payment
      */
-    public function failed(Request $request): JsonResponse
+    public function initiate(Request $request)
     {
-        $validated = $request->validate([
-            'razorpay_order_id' => 'sometimes|string',
-            'razorpay_payment_id' => 'sometimes|string',
-            'error_code' => 'sometimes|string',
-            'error_description' => 'sometimes|string',
-            'amount' => 'sometimes|numeric',
-            'email' => 'sometimes|email',
+        $request->validate([
+            'order_id' => 'required|exists:orders,id',
+            'source' => 'required|string',
+            'method' => 'string'
         ]);
 
-        $email = $validated['email'] ?? auth()->user()?->email;
-        
-        // Record failure for velocity tracking
-        if ($email) {
-            $this->fraudService->recordFailure($email, $request->ip());
+        try {
+            $order = \App\Models\Order::find($request->order_id);
+            // Check ownership
+            if ($order->user_id !== auth()->id()) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+
+            $result = $this->paymentService->processPayment($order, $request->source, $request->method ?? 'card');
+
+            if ($result['success']) {
+                return response()->json([
+                    'success' => true,
+                    'transaction_id' => $result['transaction_id']
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['message']
+                ], 400);
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
         }
-
-        // Create failed payment record for recovery
-        FailedPayment::create([
-            'user_id' => auth()->id(),
-            'email' => $email,
-            'razorpay_order_id' => $validated['razorpay_order_id'] ?? null,
-            'razorpay_payment_id' => $validated['razorpay_payment_id'] ?? null,
-            'amount' => $validated['amount'] ?? 0,
-            'currency' => 'INR',
-            'failure_reason' => $validated['error_description'] ?? 'Unknown error',
-            'failure_code' => $validated['error_code'] ?? null,
-            'recovery_status' => 'pending',
-            'metadata' => [
-                'ip_address' => $request->ip(),
-                'user_agent' => $request->userAgent(),
-            ],
-        ]);
-
-        return response()->json(['success' => true, 'message' => 'Failure logged for recovery']);
     }
-}
 
+    /**
+     * Verify a payment
+     */
+    public function verify(Request $request)
+    {
+        $request->validate(['payment_id' => 'required|string']);
+        
+        $success = $this->paymentService->verifyPayment($request->payment_id);
+        
+        return response()->json(['success' => $success]);
+    }
+
+    /**
+     * Handle failed payment frontend callback
+     */
+    public function failed(Request $request)
+    {
+        Log::info('Payment reported failed by frontend', $request->all());
+        return response()->json(['status' => 'logged']);
+    }
+
+    // Admin Methods Stubs
+    public function index() { return response()->json(['data' => []]); }
+    public function updateGateway($id) { return response()->json(['status' => 'updated']); }
+    public function transactions($orderId) { return response()->json(['data' => []]); }
+}

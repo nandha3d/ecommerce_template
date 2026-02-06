@@ -48,6 +48,11 @@ class Product extends Model
         'is_active',
         'seo_title',
         'seo_description',
+        // Shipping Dimensions
+        'weight',
+        'length',
+        'breadth',
+        'height',
         // New fields
         'is_digital',
         'is_downloadable',
@@ -57,13 +62,26 @@ class Product extends Model
         'customization_fields',
         'custom_tabs',
         'image_layout',
+        'specifications',
+        // Compliance
+        'fssai_license',
+        'batch_no',
+        'manufacturing_date',
+        'expiry_date',
+        'origin_country',
+        'hs_code',
+        'is_returnable',
+        'return_policy_days',
+        'stock_threshold',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
         'sale_price' => 'decimal:2',
         'stock_quantity' => 'integer',
+        'stock_threshold' => 'integer',
         'nutrition_facts' => 'array',
+        'specifications' => 'array',
         'benefits' => 'array',
         'tags' => 'array',
         'average_rating' => 'decimal:2',
@@ -72,6 +90,16 @@ class Product extends Model
         'is_bestseller' => 'boolean',
         'is_new' => 'boolean',
         'is_active' => 'boolean',
+        // Dimensions
+        'weight' => 'decimal:2',
+        'length' => 'decimal:2',
+        'breadth' => 'decimal:2',
+        'height' => 'decimal:2',
+        // Compliance
+        'manufacturing_date' => 'date',
+        'expiry_date' => 'date',
+        'is_returnable' => 'boolean',
+        'return_policy_days' => 'integer',
         // New casts
         'is_digital' => 'boolean',
         'is_downloadable' => 'boolean',
@@ -255,9 +283,25 @@ class Product extends Model
     /**
      * Get the current price (sale price if available).
      */
+    /**
+     * Get the current price (sale price if available).
+     * @deprecated Use variant pricing.
+     */
+    /**
+     * Get the current price (sale price if available).
+     * @deprecated Use variant pricing.
+     */
     public function getCurrentPriceAttribute(): float
     {
-        return $this->sale_price ?? $this->price;
+        // For backwards compatibility during migration, try variant first
+        $variant = $this->variants->first();
+        if ($variant) {
+            return $variant->sale_price ?? $variant->price;
+        }
+        
+        // SAFE FALLBACK: If no variants (should be rare), return 0 to prevent crash
+        // This allows admin panel to load even if product is "broken"
+        return 0.0;
     }
 
     /**
@@ -265,10 +309,16 @@ class Product extends Model
      */
     public function getDiscountPercentageAttribute(): int
     {
-        if (!$this->sale_price || $this->sale_price >= $this->price) {
+        $variant = $this->variants->first();
+        if (!$variant) return 0;
+
+        $price = $variant->price;
+        $salePrice = $variant->sale_price;
+
+        if (!$salePrice || $salePrice >= $price) {
             return 0;
         }
-        return (int) round((($this->price - $this->sale_price) / $this->price) * 100);
+        return (int) round((($price - $salePrice) / $price) * 100);
     }
 
     /**
@@ -276,7 +326,8 @@ class Product extends Model
      */
     public function getIsInStockAttribute(): bool
     {
-        return $this->stock_quantity > 0;
+        // Check if ANY variant is in stock and active
+        return $this->variants->where('stock_quantity', '>', 0)->where('is_active', true)->count() > 0;
     }
 
     /**
@@ -293,17 +344,11 @@ class Product extends Model
 
     /**
      * Update stock status based on quantity.
+     * @deprecated Stock is managed at variant level.
      */
     public function updateStockStatus(): void
     {
-        if ($this->stock_quantity <= 0) {
-            $this->stock_status = 'out_of_stock';
-        } elseif ($this->stock_quantity <= 10) {
-            $this->stock_status = 'low_stock';
-        } else {
-            $this->stock_status = 'in_stock';
-        }
-        $this->save();
+        // no-op or delegate
     }
 
     /**
@@ -318,16 +363,14 @@ class Product extends Model
 
     /**
      * Calculate final price with offers applied.
+     * @deprecated Use ProductVariant::getEffectivePrice()
      */
     public function getFinalPrice(int $quantity = 1): float
     {
-        $basePrice = $this->current_price;
-        $offer = $this->best_offer;
-
-        if (!$offer) {
-            return $basePrice * $quantity;
-        }
-
-        return $offer->calculateDiscount($basePrice, $quantity);
+        \Log::warning("Deprecated method Product::getFinalPrice() called. Use ProductVariant.", [
+            'product_id' => $this->id,
+            'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3)
+        ]);
+        throw new \LogicException("Product is not sellable directly. Please use a specific ProductVariant.");
     }
 }

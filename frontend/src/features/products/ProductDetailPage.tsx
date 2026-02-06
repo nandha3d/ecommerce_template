@@ -21,6 +21,7 @@ import { fetchProduct, fetchRelatedProducts, clearCurrentProduct } from '../../s
 import { addToCart } from '../../store/slices/cartSlice';
 import { ProductCard } from '../../components/layout';
 import { Button, Loader, Badge, ImageZoomModal } from '../../components/ui';
+import { PriceDisplay } from '../../components/common/PriceDisplay';
 import { ProductVariant } from '../../types';
 import { getImageUrl } from '../../utils/imageUtils';
 import toast from 'react-hot-toast';
@@ -328,15 +329,13 @@ const ProductDetailPage: React.FC = () => {
         }
     };
 
-    const basePrice = selectedVariant?.sale_price || selectedVariant?.price ||
-        product?.sale_price || product?.price || 0;
+    const basePrice = selectedVariant?.effective_price ?? product?.effective_price ?? 0;
     const unitPrice = basePrice + addonsTotal;
-    const unitOriginalPrice = (selectedVariant?.price || product?.price || 0) + addonsTotal;
+    const unitOriginalPrice = (selectedVariant?.price ?? product?.price ?? 0) + addonsTotal;
     const totalPrice = unitPrice * quantity;
     const totalOriginalPrice = unitOriginalPrice * quantity;
-    const discountPercentage = unitOriginalPrice > unitPrice
-        ? Math.round(((unitOriginalPrice - unitPrice) / unitOriginalPrice) * 100)
-        : 0;
+    // Use server-provided discount percentage (Strict Repair)
+    const discountPercentage = selectedVariant?.discount_percent ?? product?.discount_percent ?? 0;
 
     const detailsGridClass =
         layoutVariant === 4
@@ -571,19 +570,14 @@ const ProductDetailPage: React.FC = () => {
                         {/* Price - Hidden in Layout 3 (shown in buy box) */}
                         {layoutVariant !== 3 && (
                             <div className="flex flex-col gap-1">
-                                <div className="flex items-baseline gap-3">
-                                    <span className="text-3xl font-bold text-primary-900">
-                                        ${(totalPrice || 0).toFixed(2)}
-                                    </span>
-                                    {discountPercentage > 0 && (
-                                        <span className="text-xl text-neutral-400 line-through">
-                                            ${(totalOriginalPrice || 0).toFixed(2)}
-                                        </span>
-                                    )}
-                                </div>
+                                <PriceDisplay
+                                    amountInBase={totalPrice || 0}
+                                    originalPrice={discountPercentage > 0 ? (totalOriginalPrice || 0) : undefined}
+                                    className="text-3xl font-bold text-primary-900"
+                                />
                                 {quantity > 1 && (
-                                    <span className="text-sm text-neutral-500">
-                                        ${(unitPrice || 0).toFixed(2)} each
+                                    <span className="text-sm text-neutral-500 flex items-center gap-1">
+                                        <PriceDisplay amountInBase={unitPrice || 0} /> each
                                     </span>
                                 )}
                             </div>
@@ -651,8 +645,8 @@ const ProductDetailPage: React.FC = () => {
                                                                     {value}
                                                                 </p>
                                                                 {priceDiff !== null && (
-                                                                    <p className={`text-xs mt-1 ${priceDiff > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                                                                        {priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}${Math.abs(priceDiff || 0).toFixed(2)}
+                                                                    <p className={`text-xs mt-1 ${priceDiff > 0 ? 'text-orange-600' : 'text-green-600'} flex items-center justify-center gap-0.5`}>
+                                                                        {priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}<PriceDisplay amountInBase={Math.abs(priceDiff || 0)} />
                                                                     </p>
                                                                 )}
                                                             </button>
@@ -709,8 +703,8 @@ const ProductDetailPage: React.FC = () => {
                                                             >
                                                                 {value}
                                                                 {priceDiff !== null && (
-                                                                    <span className={`text-xs ${isSelected ? 'text-white/80' : priceDiff > 0 ? 'text-orange-500' : 'text-green-500'}`}>
-                                                                        ({priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}${Math.abs(priceDiff || 0).toFixed(2)})
+                                                                    <span className={`text-xs ${isSelected ? 'text-white/80' : priceDiff > 0 ? 'text-orange-500' : 'text-green-500'} flex items-center gap-0.5`}>
+                                                                        ({priceDiff > 0 ? '+' : ''}{priceDiff < 0 ? '-' : ''}<PriceDisplay amountInBase={Math.abs(priceDiff || 0)} />)
                                                                     </span>
                                                                 )}
                                                             </button>
@@ -755,7 +749,9 @@ const ProductDetailPage: React.FC = () => {
                                                         <span className="font-medium">{option.name}</span>
                                                     </div>
                                                     {option.price > 0 && (
-                                                        <span className="text-primary-600 font-semibold">+${(option.price || 0).toFixed(2)}</span>
+                                                        <span className="text-primary-600 font-semibold flex items-center gap-0.5">
+                                                            +<PriceDisplay amountInBase={option.price || 0} />
+                                                        </span>
                                                     )}
                                                 </label>
                                             ))}
@@ -918,23 +914,24 @@ const ProductDetailPage: React.FC = () => {
                                 {/* Price */}
                                 <div>
                                     <div className="flex items-baseline gap-3">
-                                        <span className="text-3xl font-bold text-primary-900">
-                                            ${totalPrice.toFixed(2)}
-                                        </span>
+                                        <PriceDisplay
+                                            amountInBase={totalPrice}
+                                            className="text-3xl font-bold text-primary-900"
+                                        />
                                         {discountPercentage > 0 && (
-                                            <span className="text-lg text-neutral-400 line-through">
-                                                ${totalOriginalPrice.toFixed(2)}
-                                            </span>
+                                            <div className="text-lg text-neutral-400 line-through">
+                                                <PriceDisplay amountInBase={totalOriginalPrice} />
+                                            </div>
                                         )}
                                     </div>
                                     {quantity > 1 && (
-                                        <p className="text-sm text-neutral-500 mt-1">
-                                            ${unitPrice.toFixed(2)} each
+                                        <p className="text-sm text-neutral-500 mt-1 flex items-center gap-1">
+                                            <PriceDisplay amountInBase={unitPrice} /> each
                                         </p>
                                     )}
                                     {discountPercentage > 0 && (
-                                        <p className="text-sm text-success font-medium mt-1">
-                                            You save ${(totalOriginalPrice - totalPrice).toFixed(2)} ({discountPercentage}%)
+                                        <p className="text-sm text-success font-medium mt-1 flex items-center gap-1">
+                                            You save <PriceDisplay amountInBase={totalOriginalPrice - totalPrice} /> ({discountPercentage}%)
                                         </p>
                                     )}
                                 </div>

@@ -18,12 +18,18 @@ class CartIndicator extends Component
     public function updateCartCount()
     {
         if (auth()->check()) {
-            $cart = \App\Models\Cart::where('user_id', auth()->id())->first();
-            $this->cartCount = $cart ? $cart->items()->sum('quantity') : 0;
+            $cart = \App\Models\Cart::where('user_id', auth()->id())
+                ->where('status', 'active')
+                ->latest()
+                ->first();
         } else {
-            $cart = session()->get('cart', []);
-            $this->cartCount = array_sum(array_column($cart, 'quantity'));
+            $cart = \App\Models\Cart::where('session_id', session()->getId())
+                ->where('status', 'active')
+                ->latest()
+                ->first();
         }
+
+        $this->cartCount = $cart ? $cart->items()->sum('quantity') : 0;
     }
 
     public function render()

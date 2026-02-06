@@ -39,6 +39,32 @@ class ProductVariant extends Model
     ];
 
     /**
+     * Boot the model with cascade deletion guards.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // 🔒 H7: CASCADE DELETION GUARD
+        static::deleting(function ($variant) {
+            // Check active cart references
+            if (\App\Models\CartItem::where('variant_id', $variant->id)->exists()) {
+                throw new \RuntimeException(
+                    "Cannot delete variant (SKU: {$variant->sku}): Referenced in active carts."
+                );
+            }
+
+            // Check order references (historical integrity)
+            if (\App\Models\OrderItem::where('variant_id', $variant->id)->exists()) {
+                throw new \RuntimeException(
+                    "Cannot delete variant (SKU: {$variant->sku}): Referenced in order history. " .
+                    "Consider deactivating instead."
+                );
+            }
+        });
+    }
+
+    /**
      * Get the product this variant belongs to
      */
     public function product()

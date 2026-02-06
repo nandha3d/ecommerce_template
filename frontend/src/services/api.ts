@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResp
 import axiosRetry, { isNetworkOrIdempotentRequestError } from 'axios-retry';
 import { ApiError, AuthTokens } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 /**
  * Standardized application error
@@ -120,20 +120,52 @@ const onTokenRefreshed = (token: string) => {
     refreshSubscribers = [];
 };
 
+// Helper to get or create cart session ID
+const getCartSessionId = (): string => {
+    let sessionId = localStorage.getItem('cart_session_id');
+    if (!sessionId) {
+        // ✅ Generate 32-character hex string (matches backend validation)
+        const randomBytes = new Uint8Array(16);
+        crypto.getRandomValues(randomBytes);
+        const hexString = Array.from(randomBytes)
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+        sessionId = 'guest_' + hexString;
+        localStorage.setItem('cart_session_id', sessionId);
+        console.log('Generated new cart session ID:', sessionId);
+    }
+    return sessionId;
+};
+
 // Request interceptor
 api.interceptors.request.use(
     (config: InternalAxiosRequestConfig) => {
         if (accessToken) {
             config.headers.Authorization = `Bearer ${accessToken}`;
         }
+
+        // Attach Cart Session ID
+        config.headers['X-Cart-Session'] = getCartSessionId();
+
         return config;
     },
     (error) => Promise.reject(error)
 );
 
-// Response interceptor with token refresh
+// Response interceptor with token refresh AND session capture
 api.interceptors.response.use(
-    (response: AxiosResponse) => response,
+    (response: AxiosResponse) => {
+        // ✅ If backend sends X-Cart-Session header, store it
+        const cartSessionId = response.headers['x-cart-session'];
+        if (cartSessionId) {
+            const currentSession = localStorage.getItem('cart_session_id');
+            if (currentSession !== cartSessionId) {
+                console.log('Updating cart session ID from server:', cartSessionId);
+                localStorage.setItem('cart_session_id', cartSessionId);
+            }
+        }
+        return response;
+    },
     async (error: AxiosError<ApiError>) => {
         const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 

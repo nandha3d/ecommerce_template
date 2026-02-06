@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Palette, Store, Loader2 } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
 import { Button, Card } from '../../../components/ui';
@@ -7,6 +7,9 @@ import { useStoreLayoutSettings } from '../../../storeLayout/StoreLayoutProvider
 import type { LayoutVariant } from '../../../storeLayout/storeLayoutSettings';
 import api from '../../../services/api';
 import toast from 'react-hot-toast';
+import axios from 'axios';
+
+// --- Theme Components ---
 
 const ColorField: React.FC<{
     label: string;
@@ -56,9 +59,6 @@ const ThemeSettingsContent: React.FC = () => {
 
     const variantOptions: LayoutVariant[] = [1, 2, 3, 4, 5];
 
-    /**
-     * Apply current admin theme to storefront (saves to database)
-     */
     const applyToStore = async () => {
         setIsSaving(true);
         try {
@@ -283,13 +283,7 @@ const ThemeSettingsContent: React.FC = () => {
     );
 };
 
-import { shippingService } from '../../../services/shipping.service';
-
-
-
-// ... (We need to refactor ThemeSettingsContent to be a tab inside a larger Settings container)
-// But to minimize diffs and modifying existing complex code excessively, 
-// I will create a new 'ShippingSettingsContent' component and then wrap them in a simple Tab system within SettingsPage.
+// --- Shipping Component ---
 
 const ShippingSettingsContent: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -400,19 +394,440 @@ const ShippingSettingsContent: React.FC = () => {
     );
 };
 
+// --- Globalization Component ---
+
+import { shippingService } from '../../../services/shipping.service';
+import { Globe, DollarSign, Clock, Check, X, Trash2, Search } from 'lucide-react';
+
+interface Currency {
+    id: number;
+    code: string;
+    name: string;
+    symbol: string;
+    symbol_position: 'before' | 'after';
+    decimal_places: number;
+    exchange_rate: string;
+    is_default: boolean;
+    is_base: boolean;
+    is_active: boolean;
+}
+
+interface Timezone {
+    id: number;
+    identifier: string;
+    label: string;
+    offset: string;
+    is_active: boolean;
+    is_default: boolean;
+}
+
+const COMMON_SYMBOLS: Record<string, string> = {
+    'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'INR': '₹',
+    'CAD': '$', 'AUD': '$', 'CNY': '¥', 'KRW': '₩', 'BRL': 'R$',
+    'RUB': '₽', 'TRY': '₺', 'ZAR': 'R', 'HKD': '$', 'SGD': '$',
+    'NZD': '$', 'MXN': '$'
+};
+
+const GlobalizationSettingsContent: React.FC = () => {
+    const [currencies, setCurrencies] = useState<Currency[]>([]);
+    const [timezones, setTimezones] = useState<Timezone[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Available currencies from external API
+    const [availableCurrencies, setAvailableCurrencies] = useState<Record<string, string>>({});
+    const [isLoadingAvailable, setIsLoadingAvailable] = useState(false);
+
+    const [isAddingCurrency, setIsAddingCurrency] = useState(false);
+    const [isAddingTimezone, setIsAddingTimezone] = useState(false);
+
+    // New Currency State
+    const [newCurrency, setNewCurrency] = useState({
+        code: '', name: '', symbol: '', symbol_position: 'before',
+        decimal_places: 2, exchange_rate: '', is_active: true
+    });
+
+    // New Timezone State
+    const [newTimezone, setNewTimezone] = useState({
+        identifier: '', label: '', offset: '', is_active: true
+    });
+
+    const fetchData = async () => {
+        setIsLoading(true);
+        try {
+            const [currRes, tzRes] = await Promise.all([
+                api.get('/admin/currencies'),
+                api.get('/admin/timezones')
+            ]);
+            setCurrencies(currRes.data.data || []);
+            setTimezones(tzRes.data.data || []);
+        } catch (error) {
+            toast.error('Failed to load globalization settings');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchAvailableCurrencies = async () => {
+        setIsLoadingAvailable(true);
+        try {
+            // Using Frankfurter API which is free and open
+            const res = await axios.get('https://api.frankfurter.app/currencies');
+            setAvailableCurrencies(res.data);
+        } catch (error) {
+            console.error("Failed to fetch available currencies", error);
+            // Fallback could be added here if needed
+        } finally {
+            setIsLoadingAvailable(false);
+        }
+    };
+
+    React.useEffect(() => {
+        fetchData();
+        fetchAvailableCurrencies();
+    }, []);
+
+    const handleCurrencySelect = (code: string) => {
+        if (!code) return;
+        const name = availableCurrencies[code] || '';
+        // Auto-fill symbol if known, else default to Code if not found, or empty
+        const symbol = COMMON_SYMBOLS[code] || '';
+
+        setNewCurrency(prev => ({
+            ...prev,
+            code,
+            name,
+            symbol: symbol || prev.symbol // Keep existing if mapped one isn't found
+        }));
+    };
+
+    const handleCreateCurrency = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newCurrency.code) {
+            toast.error('Please select a currency');
+            return;
+        }
+
+        try {
+            await api.post('/admin/currencies', newCurrency);
+            toast.success('Currency created successfully');
+            setIsAddingCurrency(false);
+            setNewCurrency({
+                code: '', name: '', symbol: '', symbol_position: 'before',
+                decimal_places: 2, exchange_rate: '', is_active: true
+            });
+            fetchData();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || error?.response?.data?.message || 'Failed to create currency');
+        }
+    };
+
+    const handleDeleteCurrency = async (id: number) => {
+        if (!window.confirm('Are you sure you want to delete this currency?')) return;
+        try {
+            await api.delete(`/admin/currencies/${id}`);
+            toast.success('Currency deleted');
+            fetchData();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || 'Failed to delete currency');
+        }
+    };
+
+    const handleCreateTimezone = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await api.post('/admin/timezones', newTimezone);
+            toast.success('Timezone created successfully');
+            setIsAddingTimezone(false);
+            setNewTimezone({ identifier: '', label: '', offset: '', is_active: true });
+            fetchData();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || error?.response?.data?.message || 'Failed to create timezone');
+        }
+    };
+
+    const handleDeleteTimezone = async (id: number) => {
+        if (!window.confirm('Are you sure you want to delete this timezone?')) return;
+        try {
+            await api.delete(`/admin/timezones/${id}`);
+            toast.success('Timezone deleted');
+            fetchData();
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || 'Failed to delete timezone');
+        }
+    };
+
+    // Toggles and Defaults
+    const toggleCurrencyActive = async (id: number) => {
+        try { await api.post(`/admin/currencies/${id}/toggle`); toast.success('Status updated'); fetchData(); }
+        catch (error: any) { toast.error(error?.response?.data?.error || 'Failed to update'); }
+    };
+    const setCurrencyDefault = async (id: number) => {
+        try { await api.post(`/admin/currencies/${id}/default`); toast.success('Default updated'); fetchData(); }
+        catch (error: any) { toast.error(error?.response?.data?.error || 'Failed to update'); }
+    };
+    const toggleTimezoneActive = async (id: number) => {
+        try { await api.post(`/admin/timezones/${id}/toggle`); toast.success('Status updated'); fetchData(); }
+        catch (error: any) { toast.error(error?.response?.data?.error || 'Failed to update'); }
+    };
+    const setTimezoneDefault = async (id: number) => {
+        try { await api.post(`/admin/timezones/${id}/default`); toast.success('Default updated'); fetchData(); }
+        catch (error: any) { toast.error(error?.response?.data?.error || 'Failed to update'); }
+    };
+
+    if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-primary-500" /></div>;
+
+    return (
+        <div className="space-y-8">
+            <div>
+                <h1 className="text-2xl font-bold text-primary-900">Globalization Settings</h1>
+                <p className="text-neutral-600">Manage currencies and timezones for your store.</p>
+            </div>
+
+            {/* Currencies Section */}
+            <Card className="p-0 overflow-hidden" hover={false}>
+                <div className="p-6 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
+                    <div className="flex items-center gap-2">
+                        <DollarSign className="w-5 h-5 text-primary-500" />
+                        <h2 className="text-lg font-bold text-neutral-900">Currencies</h2>
+                    </div>
+                    <Button size="sm" onClick={() => setIsAddingCurrency(!isAddingCurrency)}>
+                        {isAddingCurrency ? 'Cancel' : 'Add Currency'}
+                    </Button>
+                </div>
+
+                {isAddingCurrency && (
+                    <div className="p-6 bg-primary-50 border-b border-primary-100 animate-fade-in">
+                        <h3 className="font-semibold text-primary-900 mb-4">Add New Currency</h3>
+                        <form onSubmit={handleCreateCurrency} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                            {/* Currency Selection Dropdown */}
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold uppercase text-neutral-500">Currency</label>
+                                <select
+                                    className="w-full px-3 py-2 rounded-lg border border-neutral-200 bg-white"
+                                    value={newCurrency.code}
+                                    onChange={(e) => handleCurrencySelect(e.target.value)}
+                                    required
+                                >
+                                    <option value="">Select Currency...</option>
+                                    {isLoadingAvailable ? (
+                                        <option disabled>Loading...</option>
+                                    ) : (
+                                        Object.entries(availableCurrencies).map(([code, name]) => (
+                                            <option key={code} value={code}>
+                                                {code} - {name}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold uppercase text-neutral-500">Display Name</label>
+                                <input
+                                    placeholder="e.g. United States Dollar"
+                                    value={newCurrency.name}
+                                    onChange={e => setNewCurrency({ ...newCurrency, name: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-neutral-200"
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex gap-4">
+                                <div className="space-y-1 flex-1">
+                                    <label className="text-xs font-semibold uppercase text-neutral-500">Symbol</label>
+                                    <input
+                                        placeholder="e.g. $"
+                                        value={newCurrency.symbol}
+                                        onChange={e => setNewCurrency({ ...newCurrency, symbol: e.target.value })}
+                                        className="w-full px-3 py-2 rounded-lg border border-neutral-200"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-1 flex-1">
+                                    <label className="text-xs font-semibold uppercase text-neutral-500">Position</label>
+                                    <select
+                                        value={newCurrency.symbol_position}
+                                        onChange={e => setNewCurrency({ ...newCurrency, symbol_position: e.target.value as any })}
+                                        className="w-full px-3 py-2 rounded-lg border border-neutral-200 bg-white"
+                                    >
+                                        <option value="before">Before ($10)</option>
+                                        <option value="after">After (10$)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold uppercase text-neutral-500">Exchange Rate (vs Base)</label>
+                                <input
+                                    placeholder="Enter 1.0 for Base"
+                                    type="number"
+                                    step="0.00000001"
+                                    value={newCurrency.exchange_rate}
+                                    onChange={e => setNewCurrency({ ...newCurrency, exchange_rate: e.target.value })}
+                                    className="w-full px-3 py-2 rounded-lg border border-neutral-200"
+                                    required
+                                />
+                                <p className="text-xs text-neutral-400 mt-1">Rates can be auto-updated via CRON later.</p>
+                            </div>
+
+                            <div className="md:col-span-2 pt-2">
+                                <Button type="submit" variant="primary" className="w-full md:w-auto">Create Currency</Button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                <div className="divide-y divide-neutral-100">
+                    {currencies.map((currency) => (
+                        <div key={currency.id} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-lg bg-white border border-neutral-100 shadow-sm flex items-center justify-center text-lg font-bold text-primary-600">
+                                    {currency.symbol}
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-neutral-900">{currency.code}</span>
+                                        {currency.is_base && <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Base</span>}
+                                        {currency.is_default && <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Default</span>}
+                                    </div>
+                                    <p className="text-sm text-neutral-500">{currency.name} • Rate: {currency.exchange_rate}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!currency.is_base && (
+                                    <>
+                                        {!currency.is_default && (
+                                            <Button variant="ghost" size="sm" onClick={() => setCurrencyDefault(currency.id)}>Set Default</Button>
+                                        )}
+                                        <button
+                                            onClick={() => toggleCurrencyActive(currency.id)}
+                                            className={`p-2 rounded-lg transition-colors ${currency.is_active ? 'text-green-600 hover:bg-green-50' : 'text-neutral-400 hover:bg-neutral-100'}`}
+                                            title={currency.is_active ? "Active" : "Inactive"}
+                                        >
+                                            {currency.is_active ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteCurrency(currency.id)}
+                                            className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {currencies.length === 0 && <div className="p-8 text-center text-neutral-500">No currencies found.</div>}
+                </div>
+            </Card>
+
+            {/* Timezones Section */}
+            <Card className="p-0 overflow-hidden" hover={false}>
+                <div className="p-6 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
+                    <div className="flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-primary-500" />
+                        <h2 className="text-lg font-bold text-neutral-900">Timezones</h2>
+                    </div>
+                    <Button size="sm" onClick={() => setIsAddingTimezone(!isAddingTimezone)}>
+                        {isAddingTimezone ? 'Cancel' : 'Add Timezone'}
+                    </Button>
+                </div>
+
+                {isAddingTimezone && (
+                    <div className="p-6 bg-primary-50 border-b border-primary-100 animate-fade-in">
+                        <h3 className="font-semibold text-primary-900 mb-4">Add New Timezone</h3>
+                        <form onSubmit={handleCreateTimezone} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input
+                                placeholder="Identifier (e.g. Asia/Singapore)"
+                                value={newTimezone.identifier}
+                                onChange={e => setNewTimezone({ ...newTimezone, identifier: e.target.value })}
+                                className="px-3 py-2 rounded-lg border border-neutral-200"
+                                required
+                            />
+                            <input
+                                placeholder="Label (e.g. Singapore Time)"
+                                value={newTimezone.label}
+                                onChange={e => setNewTimezone({ ...newTimezone, label: e.target.value })}
+                                className="px-3 py-2 rounded-lg border border-neutral-200"
+                                required
+                            />
+                            <input
+                                placeholder="Offset (e.g. +08:00)"
+                                value={newTimezone.offset}
+                                onChange={e => setNewTimezone({ ...newTimezone, offset: e.target.value })}
+                                className="px-3 py-2 rounded-lg border border-neutral-200"
+                                required
+                                pattern="^[+-]\d{2}:\d{2}$"
+                                title="Format: +05:30 or -05:00"
+                            />
+                            <div className="md:col-span-2">
+                                <Button type="submit" variant="primary">Create Timezone</Button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                <div className="divide-y divide-neutral-100">
+                    {timezones.map((tz) => (
+                        <div key={tz.id} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-neutral-900">{tz.identifier}</span>
+                                    {tz.is_default && <span className="text-[10px] uppercase font-bold px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Default</span>}
+                                </div>
+                                <p className="text-sm text-neutral-500">{tz.label} • {tz.offset}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!tz.is_default && (
+                                    <>
+                                        <Button variant="ghost" size="sm" onClick={() => setTimezoneDefault(tz.id)}>Set Default</Button>
+                                        <button
+                                            onClick={() => toggleTimezoneActive(tz.id)}
+                                            className={`p-2 rounded-lg transition-colors ${tz.is_active ? 'text-green-600 hover:bg-green-50' : 'text-neutral-400 hover:bg-neutral-100'}`}
+                                            title={tz.is_active ? "Active" : "Inactive"}
+                                        >
+                                            {tz.is_active ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteTimezone(tz.id)}
+                                            className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                            title="Delete"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {timezones.length === 0 && <div className="p-8 text-center text-neutral-500">No timezones found.</div>}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
 const SettingsPage: React.FC = () => {
-    const [activeTab, setActiveTab] = useState<'theme' | 'shipping'>('theme');
+    const [activeTab, setActiveTab] = useState<'theme' | 'shipping' | 'globalization'>('theme');
 
     return (
         <AdminLayout>
             <div className="flex flex-col gap-6">
                 {/* Simple Tab Header */}
-                <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit">
+                <div className="flex items-center gap-1 bg-neutral-100 p-1 rounded-lg w-fit flex-wrap">
                     <button
                         onClick={() => setActiveTab('theme')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'theme' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}
                     >
                         Store Appearance
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('globalization')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'globalization' ? 'bg-white shadow-sm text-neutral-900' : 'text-neutral-500 hover:text-neutral-900'}`}
+                    >
+                        Currency & Timezone
                     </button>
                     <button
                         onClick={() => setActiveTab('shipping')}
@@ -423,6 +838,7 @@ const SettingsPage: React.FC = () => {
                 </div>
 
                 {activeTab === 'theme' && <ThemeSettingsContent />}
+                {activeTab === 'globalization' && <GlobalizationSettingsContent />}
                 {activeTab === 'shipping' && <ShippingSettingsContent />}
             </div>
         </AdminLayout>

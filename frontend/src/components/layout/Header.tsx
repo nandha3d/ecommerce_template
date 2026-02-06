@@ -17,6 +17,7 @@ import { toggleCart } from '../../store/slices/cartSlice';
 import { logout } from '../../store/slices/authSlice';
 import { setMobileMenuOpen } from '../../store/slices/uiSlice';
 import { useConfig } from '../../core/config/ConfigContext';
+import { CurrencySwitcher } from './CurrencySwitcher';
 
 const Header: React.FC = () => {
     const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -53,7 +54,10 @@ const Header: React.FC = () => {
             {/* Top Bar */}
             <div className="bg-primary-900 text-white py-2 px-4">
                 <div className="container mx-auto flex justify-between items-center text-sm">
-                    <p>Free shipping on orders over $50</p>
+                    <div className="flex items-center gap-4">
+                        <CurrencySwitcher />
+                        <span className="hidden sm:inline">Free shipping on orders over $50</span>
+                    </div>
                     <div className="hidden md:flex items-center gap-4">
                         <a href={`tel:${config['contact.phone']}`} className="hover:text-primary-500 transition-colors">
                             📞 {config['contact.phone']}

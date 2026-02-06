@@ -13,30 +13,27 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Core\Order\Actions\CreateOrderAction;
 use Core\Inventory\Services\InventoryService;
+use App\Services\OrderService;
 
 class OrderController extends Controller
 {
-    private CreateOrderAction $createOrderAction;
-    private InventoryService $inventoryService;
+    private OrderService $orderService;
+    private \Core\Cart\Services\CartService $cartService;
 
-    public function __construct(
-        CreateOrderAction $createOrderAction,
-        InventoryService $inventoryService
-    )
+    public function __construct(OrderService $orderService, \Core\Cart\Services\CartService $cartService)
     {
-        $this->createOrderAction = $createOrderAction;
-        $this->inventoryService = $inventoryService;
+        $this->orderService = $orderService;
+        $this->cartService = $cartService;
     }
+
+    // ... (index, show, showByNumber methods remain the same) ...
 
     /**
      * List user's orders.
      */
     public function index(Request $request): JsonResponse
     {
-        $orders = Order::with(['items.product', 'billingAddress', 'shippingAddress'])
-                       ->where('user_id', auth()->id())
-                       ->orderBy('created_at', 'desc')
-                       ->paginate(10);
+        $orders = $this->orderService->getUserOrders(auth()->user());
 
         return response()->json([
             'data' => OrderResource::collection($orders),
@@ -54,9 +51,14 @@ class OrderController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $order = Order::with(['items.product', 'billingAddress', 'shippingAddress', 'coupon'])
-                      ->where('user_id', auth()->id())
-                      ->findOrFail($id);
+        $order = $this->orderService->getOrderById($id, auth()->user());
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order not found',
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
@@ -69,10 +71,14 @@ class OrderController extends Controller
      */
     public function showByNumber(string $orderNumber): JsonResponse
     {
-        $order = Order::with(['items.product', 'billingAddress', 'shippingAddress'])
-                      ->where('order_number', $orderNumber)
-                      ->where('user_id', auth()->id())
-                      ->firstOrFail();
+        $order = $this->orderService->getOrderByNumber($orderNumber, auth()->user());
+
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order not found',
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
@@ -102,9 +108,27 @@ class OrderController extends Controller
         ]);
 
         $user = auth()->user();
-        $cart = Cart::where('user_id', $user->id)
-                    ->with(['items.product', 'items.variant', 'coupon'])
-                    ->first();
+        
+        // --- IDEMPOTENCY CHECK (Rule 9) ---
+        $idempotencyKey = $request->header('Idempotency-Key');
+        if ($idempotencyKey) {
+            $existingOrder = $this->orderService->getOrderByIdempotencyKey($idempotencyKey, $user);
+            if ($existingOrder) {
+                 return response()->json([
+                    'success' => true,
+                    'message' => 'Order already processed (Idempotent)',
+                    'data' => new OrderResource($existingOrder),
+                ], 200);
+            }
+        }
+        
+        // Use CartService to fetch the cart, handling both User ID and Session ID
+        // This ensures pending guest carts (not yet merged) are found if the session ID is present
+        $sessionId = $request->header('X-Cart-Session');
+        $cart = $this->cartService->getCart($user->id, $sessionId);
+        
+        // Eager load items for validation
+        $cart->load(['items.product', 'items.variant', 'coupon']);
 
         if (!$cart || $cart->items->isEmpty()) {
             return response()->json([
@@ -113,14 +137,13 @@ class OrderController extends Controller
             ], 400);
         }
 
-        DB::beginTransaction();
-
         try {
-            $order = $this->createOrderAction->execute($user, $cart, $request->all());
+            $orderData = $request->all();
+            if ($idempotencyKey) {
+                $orderData['idempotency_key'] = $idempotencyKey;
+            }
 
-            DB::commit();
-
-            $order->load(['items.product', 'billingAddress', 'shippingAddress']);
+            $order = $this->orderService->createOrder($user, $cart, $orderData);
 
             return response()->json([
                 'success' => true,
@@ -129,7 +152,6 @@ class OrderController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create order: ' . $e->getMessage(),
@@ -142,21 +164,17 @@ class OrderController extends Controller
      */
     public function cancel(int $id): JsonResponse
     {
-        $order = Order::where('user_id', auth()->id())
-                      ->whereIn('status', [Order::STATUS_PENDING, Order::STATUS_CONFIRMED])
-                      ->findOrFail($id);
+        $order = $this->orderService->getOrderById($id, auth()->user());
 
-        DB::beginTransaction();
+        if (!$order) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Order not found',
+            ], 404);
+        }
 
         try {
-            // Restore stock
-            foreach ($order->items as $item) {
-                $this->inventoryService->incrementStock($item->product, $item->quantity);
-            }
-
-            $order->updateStatus(Order::STATUS_CANCELLED);
-
-            DB::commit();
+            $order = $this->orderService->cancelOrder($order);
 
             return response()->json([
                 'success' => true,
@@ -165,11 +183,10 @@ class OrderController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to cancel order',
-            ], 500);
+                'message' => $e->getMessage(),
+            ], 400);
         }
     }
 }

@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Core\Cart\Services\CartPricingService;
+
 
 class Cart extends Model
 {
@@ -14,9 +14,34 @@ class Cart extends Model
 
     protected $fillable = [
         'user_id',
+        'status',
         'session_id',
+        'currency_code',
+        'locale',
         'coupon_id',
+        'discount',
+        'subtotal',
+        'tax_amount',
+        'shipping_cost',
+        'total',
     ];
+
+    protected $attributes = [
+        'status' => 'active',
+        'currency_code' => 'USD',
+        'locale' => 'en_US',
+    ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($cart) {
+            if (!isset($cart->status)) {
+                $cart->status = 'active';
+            }
+        });
+    }
 
     /**
      * Get the user that owns the cart.
@@ -43,52 +68,14 @@ class Cart extends Model
     }
 
     /**
-     * Get subtotal.
-     */
-    public function getSubtotalAttribute(): float
-    {
-        return app(CartPricingService::class)->getSubtotal($this);
-    }
-
-    /**
-     * Get discount amount.
-     */
-    public function getDiscountAttribute(): float
-    {
-        return app(CartPricingService::class)->getDiscount($this);
-    }
-
-    /**
-     * Get shipping cost.
-     */
-    public function getShippingAttribute(): float
-    {
-        return app(CartPricingService::class)->getShipping($this);
-    }
-
-    /**
-     * Get tax amount.
-     */
-    public function getTaxAttribute(): float
-    {
-        return app(CartPricingService::class)->getTax($this);
-    }
-
-    /**
-     * Get total.
-     */
-    public function getTotalAttribute(): float
-    {
-        return app(CartPricingService::class)->getTotal($this);
-    }
-
-    /**
      * Get item count.
      */
     public function getItemCountAttribute(): int
     {
         return $this->items->sum('quantity');
     }
+
+
 
 
 }

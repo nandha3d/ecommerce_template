@@ -9,20 +9,24 @@ import {
     Check,
     Lock
 } from 'lucide-react';
-import { useAppSelector } from '../../hooks/useRedux';
+import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
 import { useStoreLayoutSettings } from '../../storeLayout/StoreLayoutProvider';
-import { orderService } from '../../services';
+import { orderService } from '../../services/order.service';
 import { Button, Input, Loader } from '../../components/ui';
+import { PriceDisplay } from '../../components/common/PriceDisplay';
 import { SEO } from '../../components/common/SEO';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../../utils/imageUtils';
 import { AddressList } from '../user/components/AddressList';
 import { Address } from '../../types';
+import { getLayoutConfig } from '../../constants/layouts';
 
 type CheckoutStep = 'address' | 'shipping' | 'payment' | 'review';
 
 const CheckoutPage: React.FC = () => {
     const navigate = useNavigate();
+    // dispatch is available if needed for other actions
+    // const dispatch = useAppDispatch(); 
     const { cart, isLoading: cartLoading } = useAppSelector((state) => state.cart);
     const { settings } = useStoreLayoutSettings();
     const layoutVariant = settings.checkout;
@@ -59,11 +63,11 @@ const CheckoutPage: React.FC = () => {
 
     const shippingOptions = [
         { id: 'standard', name: 'Standard Shipping', price: 0, days: '5-7 business days' },
-        { id: 'express', name: 'Express Shipping', price: 9.99, days: '2-3 business days' },
-        { id: 'overnight', name: 'Overnight Shipping', price: 19.99, days: 'Next business day' },
+        // Backend does not support Express/Overnight yet. Removed to prevent Money Path violation.
     ];
 
     const handlePlaceOrder = async () => {
+        if (!cart) return;
         setIsSubmitting(true);
         try {
             if (!selectedAddressObj) {
@@ -72,18 +76,22 @@ const CheckoutPage: React.FC = () => {
                 return;
             }
 
-            const orderData = {
-                billing_address_id: selectedAddressObj.id,
-                shipping_address_id: selectedAddressObj.id,
+            // Create order using the correct backend flow
+            const order = await orderService.createOrder({
                 payment_method: paymentMethod,
-                same_as_billing: true,
-            };
+                shipping_address_id: selectedAddressObj.id,
+                billing_address_id: selectedAddressObj.id, // Use same address for billing
+            });
 
-            const order = await orderService.createOrder(orderData);
-            toast.success('Order placed successfully!');
-            navigate(`/checkout/success?order=${order.order_number}`);
+            // Navigate to success page with order ID
+            navigate(`/checkout/success?order=${order.id}`);
         } catch (error: any) {
-            toast.error(error.response?.data?.message || 'Failed to place order');
+            // Extract meaningful error message from 422 validation errors
+            const message = error.response?.data?.message
+                || error.response?.data?.error
+                || error.message
+                || 'Failed to place order';
+            toast.error(message);
         } finally {
             setIsSubmitting(false);
         }
@@ -92,20 +100,21 @@ const CheckoutPage: React.FC = () => {
     if (cartLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center">
-                <Loader size="lg" text="Loading checkout..." />
+                <Loader size="lg" text="Loading secure checkout..." />
             </div>
         );
     }
 
-    if (!cart?.items?.length) {
-        navigate('/cart');
-        return null;
+    if (!cart || !cart.items.length) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+                <h2 className="text-xl font-bold">Your cart is empty</h2>
+                <Button onClick={() => navigate('/cart')}>Return to Cart</Button>
+            </div>
+        );
     }
 
-    const reverseColumns = layoutVariant === 2;
-    const singleColumn = layoutVariant === 3 || layoutVariant === 4;
-    const summaryFirst = layoutVariant === 3;
-    const earlyColumns = layoutVariant === 5;
+    const { reverseColumns, singleColumn, summaryFirst, earlyColumns } = getLayoutConfig(layoutVariant);
 
     const gridWrapperClass = earlyColumns ? 'grid md:grid-cols-3 gap-8' : 'grid lg:grid-cols-3 gap-8';
     const mainColClass = earlyColumns
@@ -124,7 +133,7 @@ const CheckoutPage: React.FC = () => {
                     {cart.items.map((item) => (
                         <div key={item.id} className="flex gap-3">
                             <img
-                                src={getImageUrl(item.product.images[0]?.url)}
+                                src={item.product.images[0]?.url ? getImageUrl(item.product.images[0].url) : '/placeholder-product.jpg'}
                                 alt={item.product.name}
                                 className="w-12 h-12 object-cover rounded"
                             />
@@ -132,7 +141,9 @@ const CheckoutPage: React.FC = () => {
                                 <p className="text-sm font-medium truncate">{item.product.name}</p>
                                 <p className="text-xs text-neutral-500">Qty: {item.quantity}</p>
                             </div>
-                            <p className="text-sm font-medium">${item.total_price.toFixed(2)}</p>
+                            <p className="text-sm font-medium">
+                                <PriceDisplay amountInBase={item.total_price} />
+                            </p>
                         </div>
                     ))}
                 </div>
@@ -140,36 +151,37 @@ const CheckoutPage: React.FC = () => {
                 <div className="space-y-3 py-4 border-t border-b border-neutral-100">
                     <div className="flex justify-between text-neutral-600">
                         <span>Subtotal</span>
-                        <span>${cart.subtotal.toFixed(2)}</span>
+                        <span><PriceDisplay amountInBase={cart.subtotal} /></span>
                     </div>
                     {cart.discount > 0 && (
                         <div className="flex justify-between text-success">
                             <span>Discount</span>
-                            <span>-${cart.discount.toFixed(2)}</span>
+                            <span>-<PriceDisplay amountInBase={cart.discount} /></span>
                         </div>
                     )}
                     <div className="flex justify-between text-neutral-600">
                         <span>Shipping</span>
                         <span>
-                            {shippingOptions.find(s => s.id === shippingMethod)?.price === 0
+                            {cart.shipping === 0
                                 ? 'Free'
-                                : `$${shippingOptions.find(s => s.id === shippingMethod)?.price.toFixed(2)}`
+                                : <PriceDisplay amountInBase={cart.shipping} />
                             }
                         </span>
                     </div>
                     <div className="flex justify-between text-neutral-600">
                         <span>Tax</span>
-                        <span>${cart.tax.toFixed(2)}</span>
+                        <span><PriceDisplay amountInBase={cart.tax} /></span>
                     </div>
                 </div>
 
                 <div className="flex justify-between text-xl font-bold text-primary-900 pt-4">
                     <span>Total</span>
-                    <span>${(cart.total + (shippingOptions.find(s => s.id === shippingMethod)?.price || 0)).toFixed(2)}</span>
+                    <span><PriceDisplay amountInBase={cart.total} /></span>
                 </div>
             </div>
         </div>
     );
+
 
     const addressStep = (
         <div className="bg-white rounded-xl p-6 shadow-card">
@@ -346,7 +358,7 @@ const CheckoutPage: React.FC = () => {
                                                     {cart.items.map((item) => (
                                                         <div key={item.id} className="flex items-center gap-4">
                                                             <img
-                                                                src={getImageUrl(item.product.images[0]?.url)}
+                                                                src={item.product.images[0]?.url ? getImageUrl(item.product.images[0].url) : '/placeholder-product.jpg'}
                                                                 alt={item.product.name}
                                                                 className="w-16 h-16 object-cover rounded-lg"
                                                             />
@@ -354,7 +366,9 @@ const CheckoutPage: React.FC = () => {
                                                                 <p className="font-medium">{item.product.name}</p>
                                                                 <p className="text-sm text-neutral-500">Qty: {item.quantity}</p>
                                                             </div>
-                                                            <p className="font-bold">${item.total_price.toFixed(2)}</p>
+                                                            <p className="font-bold">
+                                                                <PriceDisplay amountInBase={item.total_price} />
+                                                            </p>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -374,7 +388,7 @@ const CheckoutPage: React.FC = () => {
                                             </Button>
                                             <Button type="submit" size="lg" isLoading={isSubmitting}>
                                                 <Lock className="w-5 h-5 mr-2" />
-                                                Place Order - ${cart.total.toFixed(2)}
+                                                Place Order <span className="ml-1 opacity-90"><PriceDisplay amountInBase={cart.total} /></span>
                                             </Button>
                                         </div>
                                     </div>
@@ -501,7 +515,7 @@ const CheckoutPage: React.FC = () => {
                                                     {cart.items.map((item) => (
                                                         <div key={item.id} className="flex items-center gap-4">
                                                             <img
-                                                                src={getImageUrl(item.product.images[0]?.url)}
+                                                                src={item.product.images[0]?.url ? getImageUrl(item.product.images[0].url) : '/placeholder-product.jpg'}
                                                                 alt={item.product.name}
                                                                 className="w-16 h-16 object-cover rounded-lg"
                                                             />
@@ -509,7 +523,9 @@ const CheckoutPage: React.FC = () => {
                                                                 <p className="font-medium">{item.product.name}</p>
                                                                 <p className="text-sm text-neutral-500">Qty: {item.quantity}</p>
                                                             </div>
-                                                            <p className="font-bold">${item.total_price.toFixed(2)}</p>
+                                                            <p className="font-bold">
+                                                                <PriceDisplay amountInBase={item.total_price} />
+                                                            </p>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -529,7 +545,7 @@ const CheckoutPage: React.FC = () => {
                                             </Button>
                                             <Button type="submit" size="lg" isLoading={isSubmitting}>
                                                 <Lock className="w-5 h-5 mr-2" />
-                                                Place Order - ${cart.total.toFixed(2)}
+                                                Place Order <span className="ml-1 opacity-90"><PriceDisplay amountInBase={cart.total} /></span>
                                             </Button>
                                         </div>
                                     </div>

@@ -22,6 +22,12 @@ class AppServiceProvider extends ServiceProvider
             return DB::connection()->getPdo();
         });
 
+        // Bind ProductRepository
+        $this->app->bind(
+            \App\Repositories\ProductRepositoryInterface::class,
+            \App\Repositories\ProductRepository::class
+        );
+
         // Bind Repository
         $this->app->bind(PricingRuleRepository::class, function ($app) {
             return new PricingRuleRepository($app->make('CorePDO'));

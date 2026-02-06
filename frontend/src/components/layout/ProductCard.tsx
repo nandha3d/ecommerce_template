@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Heart, Star, Eye } from 'lucide-react';
 import { Product } from '../../types';
 import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import { addToCart } from '../../store/slices/cartSlice';
+import { wishlistService } from '../../services';
 import { Badge, Button } from '../ui';
 import toast from 'react-hot-toast';
 import { getImageUrl } from '../../utils/imageUtils';
+import { PriceDisplay } from '../common/PriceDisplay';
 
 interface ProductCardProps {
     product: Product;
@@ -18,19 +20,46 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const { isAuthenticated } = useAppSelector((state) => state.auth);
+    const [isInWishlist, setIsInWishlist] = useState(false);
+    const [wishlistLoading, setWishlistLoading] = useState(false);
 
-    const discountPercentage = (product.sale_price && product.price)
-        ? Math.round(((product.price - product.sale_price) / product.price) * 100)
-        : 0;
+    // Use server-provided discount (Strict Repair)
+    const discountPercentage = product.discount_percent || 0;
+
+    // Get the default variant ID for cart operations
+    const defaultVariantId = product.variants?.[0]?.id || (product as any).default_variant_id;
 
     const handleAddToCart = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
         try {
-            await dispatch(addToCart({ productId: product.id, quantity: 1 })).unwrap();
+            await dispatch(addToCart({ productId: product.id, quantity: 1, variantId: defaultVariantId })).unwrap();
             toast.success('Added to cart!');
         } catch (error) {
             toast.error('Failed to add to cart');
+        }
+    };
+
+    const handleToggleWishlist = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (wishlistLoading) return;
+
+        setWishlistLoading(true);
+        try {
+            if (isInWishlist) {
+                await wishlistService.removeFromWishlist(product.id);
+                setIsInWishlist(false);
+                toast.success('Removed from wishlist');
+            } else {
+                await wishlistService.addToWishlist(product.id);
+                setIsInWishlist(true);
+                toast.success('Added to wishlist!');
+            }
+        } catch (error) {
+            toast.error('Failed to update wishlist');
+        } finally {
+            setWishlistLoading(false);
         }
     };
 
@@ -100,14 +129,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
                 <div className="absolute top-3 right-3 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     {isAuthenticated && (
                         <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                // Add to wishlist logic
-                            }}
-                            className="w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-neutral-600 hover:text-danger hover:bg-red-50 transition-colors"
+                            onClick={handleToggleWishlist}
+                            disabled={wishlistLoading}
+                            className={`w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center transition-colors ${isInWishlist
+                                ? 'text-danger bg-red-50'
+                                : 'text-neutral-600 hover:text-danger hover:bg-red-50'
+                                } ${wishlistLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            <Heart className="w-4 h-4" />
+                            <Heart className={`w-4 h-4 ${isInWishlist ? 'fill-current' : ''}`} />
                         </button>
                     )}
                     <button
@@ -172,20 +201,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, showQuickAdd = true 
 
                 {/* Price */}
                 <div className="flex items-center gap-2">
-                    {product.sale_price ? (
-                        <>
-                            <span className="text-lg font-bold text-primary-900">
-                                ${(Number(product.sale_price) || 0).toFixed(2)}
-                            </span>
-                            <span className="text-sm text-neutral-400 line-through">
-                                ${(Number(product.price) || 0).toFixed(2)}
-                            </span>
-                        </>
-                    ) : (
-                        <span className="text-lg font-bold text-primary-900">
-                            ${(Number(product.price) || 0).toFixed(2)}
-                        </span>
-                    )}
+                    <PriceDisplay
+                        amountInBase={product.effective_price || product.price || 0}
+                        originalPrice={product.discount_percent ? (product.price || 0) : undefined}
+                        className="text-lg font-bold text-primary-900"
+                    />
                 </div>
 
                 {/* Stock Status */}

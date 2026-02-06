@@ -13,6 +13,7 @@ class Order extends Model
 
     protected $fillable = [
         'order_number',
+        'idempotency_key',
         'user_id',
         'status',
         'payment_status',
@@ -32,6 +33,7 @@ class Order extends Model
     ];
 
     protected $casts = [
+        'status' => \App\Enums\OrderState::class,
         'subtotal' => 'decimal:2',
         'discount' => 'decimal:2',
         'shipping' => 'decimal:2',
@@ -40,14 +42,6 @@ class Order extends Model
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
     ];
-
-    const STATUS_PENDING = 'pending';
-    const STATUS_CONFIRMED = 'confirmed';
-    const STATUS_PROCESSING = 'processing';
-    const STATUS_SHIPPED = 'shipped';
-    const STATUS_DELIVERED = 'delivered';
-    const STATUS_CANCELLED = 'cancelled';
-    const STATUS_REFUNDED = 'refunded';
 
     const PAYMENT_PENDING = 'pending';
     const PAYMENT_PAID = 'paid';
@@ -106,6 +100,41 @@ class Order extends Model
                 $order->order_number = static::generateOrderNumber();
             }
         });
+
+        // 🔒 IMMUTABILITY GUARD
+        static::updating(function ($order) {
+            $immutableFields = [
+                'total', 'subtotal', 'tax', 'discount', 'shipping', 
+                'currency', 'order_number', 'user_id'
+            ];
+
+            foreach ($immutableFields as $field) {
+                if ($order->isDirty($field)) {
+                    // Allow if it's the first time setting it (should be creating, but just in case)
+                    // Actually, updates shouldn't touch these.
+                    \Log::critical("SECURITY: Attempt to mutate immutable order field", [
+                        'order_id' => $order->id,
+                        'field' => $field,
+                        'old' => $order->getOriginal($field),
+                        'new' => $order->$field,
+                        'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5)
+                    ]);
+                    throw new \RuntimeException("Security Violation: Order field '{$field}' is immutable.");
+                }
+            }
+            
+            // State transitions must go through StateMachine (Blocked here? No, model doesn't know source)
+            // But we can implicitly trust if the updated_at changes. 
+            // We can't easily block specific callers here without complex trace analysis.
+            // The "OrderStateMachine" requirement comes later.
+        });
+        
+        static::deleting(function ($order) {
+            // Optional: Block deletion of paid orders?
+            if ($order->status !== \App\Enums\OrderState::PENDING && $order->status !== \App\Enums\OrderState::FAILED) {
+                 throw new \RuntimeException("Security Violation: Cannot delete processed order.");
+            }
+        });
     }
 
     /**
@@ -124,42 +153,25 @@ class Order extends Model
      */
     public function scopePending($query)
     {
-        return $query->where('status', self::STATUS_PENDING);
+        return $query->where('status', \App\Enums\OrderState::PENDING);
     }
 
     /**
-     * Scope for completed orders.
+     * Scope for paid orders.
      */
-    public function scopeCompleted($query)
+    public function scopePaid($query)
     {
-        return $query->where('status', self::STATUS_DELIVERED);
+        return $query->where('status', \App\Enums\OrderState::PAID);
     }
 
     /**
-     * Update order status.
+     * Scope for fulfilled orders.
      */
-    public function updateStatus(string $status): void
+    public function scopeFulfilled($query)
     {
-        $this->status = $status;
-        
-        if ($status === self::STATUS_SHIPPED) {
-            $this->shipped_at = now();
-        } elseif ($status === self::STATUS_DELIVERED) {
-            $this->delivered_at = now();
-        }
-        
-        $this->save();
+        return $query->where('status', \App\Enums\OrderState::FULFILLED);
     }
 
-    /**
-     * Calculate totals from items.
-     */
-    public function calculateTotals(): void
-    {
-        $subtotal = $this->items->sum('total_price');
-        $this->subtotal = $subtotal;
-        $this->tax = $subtotal * 0.08; // 8% tax
-        $this->total = $subtotal - $this->discount + $this->shipping + $this->tax;
-        $this->save();
-    }
+
+
 }

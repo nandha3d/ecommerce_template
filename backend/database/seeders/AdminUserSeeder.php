@@ -10,9 +10,13 @@ class AdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $adminEmail = env('ADMIN_EMAIL', 'admin@shopkart.com');
-        $adminPassword = env('ADMIN_PASSWORD', 'ChangeMe123!');
+        $adminEmail = env('ADMIN_EMAIL');
+        $adminPassword = env('ADMIN_PASSWORD');
         $adminName = env('ADMIN_NAME', 'Admin');
+
+        if (!$adminEmail || !$adminPassword) {
+            throw new \RuntimeException("AdminUserSeeder requires ADMIN_EMAIL and ADMIN_PASSWORD environment variables.");
+        }
 
         User::firstOrCreate(
             ['email' => $adminEmail],

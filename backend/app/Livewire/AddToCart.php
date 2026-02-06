@@ -4,16 +4,25 @@ namespace App\Livewire;
 
 use Livewire\Component;
 use Core\Product\Models\Product;
+use Core\Cart\Services\CartService;
+use Illuminate\Support\Str;
 
 class AddToCart extends Component
 {
     public $productId;
     public $quantity = 1;
     public $selectedVariant = null;
+    public $errorMessage = null;
     
     public function mount($productId)
     {
         $this->productId = $productId;
+        
+        // Pre-select default variant for simple products
+        $product = Product::with('variants')->find($productId);
+        if ($product && $product->variants->count() === 1) {
+            $this->selectedVariant = $product->variants->first()->id;
+        }
     }
     
     public function increment()
@@ -30,67 +39,54 @@ class AddToCart extends Component
     
     public function addToCart()
     {
+        $this->errorMessage = null;
+        
         $product = Product::with('variants')->findOrFail($this->productId);
         
-        // Get the effective price (sale price or regular price)
-        $price = $product->sale_price ?? $product->price;
-        $variantId = $this->selectedVariant;
-
-        if ($variantId) {
-            $variant = $product->variants->find($variantId);
-            if ($variant) {
-                $price = $variant->sale_price ?? $variant->price ?? $price;
-            }
+        // For variable products with multiple variants, require selection
+        if ($product->variants->count() > 1 && !$this->selectedVariant) {
+            $this->addError('selectedVariant', 'Please select an option.');
+            return;
         }
-
-        if (auth()->check()) {
-            // Authenticated user - use database cart
-            $cart = \App\Models\Cart::firstOrCreate(
-                ['user_id' => auth()->id()],
-                ['session_id' => null]
-            );
-
-            $existingItem = $cart->items()
-                ->where('product_id', $this->productId)
-                ->where('variant_id', $variantId)
-                ->first();
-
-            if ($existingItem) {
-                $existingItem->update([
-                    'quantity' => $existingItem->quantity + $this->quantity
-                ]);
-            } else {
-                $cart->items()->create([
-                    'product_id' => $this->productId,
-                    'variant_id' => $variantId,
-                    'quantity' => $this->quantity,
-                    'unit_price' => $price,
-                ]);
-            }
-        } else {
-            // Guest user - use session cart
-            $cart = session()->get('cart', []);
-            $key = $this->productId . '-' . ($variantId ?? 'null');
+        
+        try {
+            /** @var CartService $cartService */
+            $cartService = app(CartService::class);
             
-            if (isset($cart[$key])) {
-                $cart[$key]['quantity'] += $this->quantity;
-            } else {
-                $cart[$key] = [
-                    'product_id' => $this->productId,
-                    'variant_id' => $variantId,
-                    'quantity' => $this->quantity,
-                    'unit_price' => $price,
-                    'name' => $product->name,
-                ];
+            // Get or create cart
+            $userId = auth()->id();
+            $sessionId = session()->get('cart_session_id');
+            
+            if (!$userId && !$sessionId) {
+                $sessionId = 'cart_' . Str::random(40);
+                session()->put('cart_session_id', $sessionId);
             }
-            session()->put('cart', $cart);
+            
+            $cart = $cartService->getCart($userId, $sessionId);
+            
+            // CartService handles default variant resolution for simple products
+            // Pass selectedVariant (null is OK for simple products - service resolves it)
+            $cartService->addItem(
+                $cart,
+                $this->productId,
+                $this->quantity,
+                $this->selectedVariant
+            );
+            
+            // Emit event to update cart count in header
+            $this->dispatch('cart-updated');
+            
+            // Show success message
+            session()->flash('message', 'Product added to cart successfully!');
+            
+        } catch (\InvalidArgumentException $e) {
+            $this->errorMessage = $e->getMessage();
+        } catch (\Core\Cart\Exceptions\PriceChangedException $e) {
+            $this->errorMessage = 'Prices have changed. Please refresh and try again.';
+        } catch (\Exception $e) {
+            $this->errorMessage = 'Unable to add to cart. Please try again.';
+            \Log::error('AddToCart Error: ' . $e->getMessage(), ['product_id' => $this->productId]);
         }
-        
-        // Emit event to update cart count in header
-        $this->dispatch('cart-updated');
-        
-        // Show success message
-        session()->flash('message', 'Product added to cart successfully!');
     }
     
     public function render()

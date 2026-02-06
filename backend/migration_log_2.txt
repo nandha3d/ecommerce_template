@@ -1,0 +1,26 @@
+
+   INFO  Running migrations.  
+
+  2026_02_06_000000_update_schema_for_ultra_premium_engine  93ms FAIL
+
+In Connection.php line 829:
+                                                                      
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'cart_id' i  
+  n 'orders' (Connection: mysql, SQL: alter table `orders` add `chec  
+  kout_session_id` bigint unsigned null after `cart_id`, add `fulfil  
+  lment_status` enum('unfulfilled', 'partial', 'fulfilled', 'returne  
+  d') not null default 'unfulfilled' after `payment_status`, add `cu  
+  rrency_code` char(3) not null default 'USD' after `fulfillment_sta  
+  tus`, add `shipping_address` json null after `total`, add `billing  
+  _address` json null after `shipping_address`, add `shipping_method  
+  ` json null after `billing_address`, add `metadata` json null afte  
+  r `notes`, add `confirmed_at` timestamp null after `placed_at`, ad  
+  d `cancelled_at` timestamp null after `delivered_at`)               
+                                                                      
+
+In Connection.php line 587:
+                                                                      
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'cart_id' i  
+  n 'orders'                                                          
+                                                                      
+

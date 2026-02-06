@@ -1,0 +1,20 @@
+
+   INFO  Running migrations.  
+
+  2026_02_06_000000_update_schema_for_ultra_premium_engine  95ms FAIL
+
+In Connection.php line 829:
+                                                                      
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'configurat  
+  ion' in 'order_items' (Connection: mysql, SQL: alter table `order_  
+  items` add `fulfillment_status` enum('unfulfilled', 'fulfilled', '  
+  returned') not null default 'unfulfilled' after `configuration`, a  
+  dd `configuration` json null after `total_price`)                   
+                                                                      
+
+In Connection.php line 587:
+                                                                      
+  SQLSTATE[42S22]: Column not found: 1054 Unknown column 'configurat  
+  ion' in 'order_items'                                               
+                                                                      
+

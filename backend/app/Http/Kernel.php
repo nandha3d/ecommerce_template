@@ -33,6 +33,7 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
+            \App\Http\Middleware\ContextMiddleware::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
@@ -54,5 +55,6 @@ class Kernel extends HttpKernel
         'payment.rate_limit' => \App\Http\Middleware\PaymentRateLimiter::class,
         'rate.limit' => \App\Http\Middleware\RateLimiter::class,
         'cache' => \App\Http\Middleware\CacheHeaders::class,
+        'cart.owner' => \App\Http\Middleware\EnsureCartOwnership::class,
     ];
 }

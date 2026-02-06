@@ -11,12 +11,17 @@ class ModuleManager
     protected ?LicenseManager $licenseManager = null;
     
     const CACHE_KEY = 'active_modules';
-    const CACHE_TTL = 3600; // 1 hour
+    // Removed const CACHE_TTL
 
-    public function __construct()
+    public function __construct(private ConfigurationService $config)
     {
         // Lazy load to avoid circular dependencies
         $this->licenseManager = app(LicenseManager::class);
+    }
+
+    private function getCacheTTL(): int
+    {
+        return $this->config->getInt('cache.ttl.modules', 3600);
     }
 
     /**
@@ -33,11 +38,11 @@ class ModuleManager
     }
 
     /**
-     * Get active modules (both enabled and licensed)
+     * Active modules (both enabled and licensed)
      */
     public function active()
     {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
+        return Cache::remember(self::CACHE_KEY, $this->getCacheTTL(), function () {
             return Module::active()->orderBy('sort_order')->get()->filter(function ($module) {
                 return $this->isLicensed($module->slug);
             });

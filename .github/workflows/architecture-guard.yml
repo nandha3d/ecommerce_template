@@ -1,0 +1,22 @@
+name: Architecture & Hardcode Guard
+
+on:
+  pull_request:
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  hardcode-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hardcode Guard
+        working-directory: ./backend
+        run: |
+          # Ensure script is executable
+          chmod +x ci/hardcode_guard.sh
+          # Run the script
+          bash ci/hardcode_guard.sh

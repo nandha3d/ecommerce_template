@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\ConfigurationService;
 
 class PaymentVelocity extends Model
 {
@@ -27,17 +28,13 @@ class PaymentVelocity extends Model
         'window_start' => 'datetime',
     ];
 
-    // Velocity limits per 24 hours
-    public const LIMITS = [
-        'ip' => 10,      // 10 attempts per IP
-        'email' => 5,    // 5 attempts per email
-        'card' => 3,     // 3 attempts per card
-        'user' => 10,    // 10 attempts per user
-    ];
-
     // Scopes
-    public function scopeWithinWindow($query, int $hours = 24)
+    public function scopeWithinWindow($query, ?int $hours = null)
     {
+        if ($hours === null) {
+            $config = app(ConfigurationService::class);
+            $hours = $config->getInt('payment.velocity.window_hours', 24);
+        }
         return $query->where('window_start', '>=', now()->subHours($hours));
     }
 
@@ -51,8 +48,11 @@ class PaymentVelocity extends Model
     {
         $record = static::firstOrNew(['type' => $type, 'value' => $value]);
         
-        // Reset if window expired (24 hours)
-        if ($record->exists && $record->window_start && $record->window_start->diffInHours(now()) >= 24) {
+        $config = app(ConfigurationService::class);
+        $windowHours = $config->getInt('payment.velocity.window_hours', 24);
+
+        // Reset if window expired
+        if ($record->exists && $record->window_start && $record->window_start->diffInHours(now()) >= $windowHours) {
             $record->attempt_count = 0;
             $record->success_count = 0;
             $record->failure_count = 0;
@@ -87,11 +87,12 @@ class PaymentVelocity extends Model
 
     public static function isVelocityExceeded(string $type, string $value): bool
     {
-        $limit = self::LIMITS[$type] ?? 10;
+        $config = app(ConfigurationService::class);
+        $limit = $config->getInt("payment.velocity.limit.{$type}", self::getDefaultLimit($type));
         
         $record = static::ofType($type)
             ->where('value', $value)
-            ->withinWindow(24)
+            ->withinWindow() // uses default config from scope
             ->first();
         
         return $record && $record->attempt_count >= $limit;
@@ -99,11 +100,12 @@ class PaymentVelocity extends Model
 
     public static function getVelocityScore(string $type, string $value): int
     {
-        $limit = self::LIMITS[$type] ?? 10;
+        $config = app(ConfigurationService::class);
+        $limit = $config->getInt("payment.velocity.limit.{$type}", self::getDefaultLimit($type));
         
         $record = static::ofType($type)
             ->where('value', $value)
-            ->withinWindow(24)
+            ->withinWindow()
             ->first();
         
         if (!$record) {
@@ -111,7 +113,18 @@ class PaymentVelocity extends Model
         }
         
         // Score based on how close to limit (0-25 points)
-        $ratio = $record->attempt_count / $limit;
+        $ratio = $limit > 0 ? $record->attempt_count / $limit : 1;
         return (int) min(25, $ratio * 25);
+    }
+
+    private static function getDefaultLimit(string $type): int
+    {
+        return match($type) {
+            'ip' => 10,
+            'email' => 5,
+            'card' => 3,
+            'user' => 10,
+            default => 10
+        };
     }
 }

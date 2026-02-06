@@ -22,7 +22,18 @@ class ReserveStockListener
         }
 
         foreach ($event->order->items as $item) {
-            $this->inventoryService->decrementStock($item->product, $item->quantity);
+            $variant = $item->variant;
+            if (!$variant) {
+                 // Try fallback or throw
+                 $variant = $item->product->variants->first();
+            }
+            
+            if (!$variant) {
+                // Critical Inventory Error
+                throw new \RuntimeException("Cannot reserve stock: Variant not found for Item ID {$item->id}");
+            }
+
+            $this->inventoryService->decrementStock($variant, $item->quantity);
         }
     }
 }

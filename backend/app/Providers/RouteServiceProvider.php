@@ -42,5 +42,27 @@ class RouteServiceProvider extends ServiceProvider
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
+
+        // Audit Requirement: Cart Rate Limiting
+        RateLimiter::for('cart', function (Request $request) {
+            return Limit::perMinute(60)
+                ->by($request->user()?->id ?: $request->ip())
+                ->response(function () {
+                    return response()->json([
+                        'message' => 'Too many cart operations. Please slow down.'
+                    ], 429);
+                });
+        });
+
+        // Audit Requirement: Stricter Coupon Rate Limiting
+        RateLimiter::for('coupon', function (Request $request) {
+            return Limit::perMinute(5)
+                ->by($request->user()?->id ?: $request->ip())
+                ->response(function () {
+                    return response()->json([
+                        'message' => 'Too many coupon attempts. Please try again later.'
+                    ], 429);
+                });
+        });
     }
 }

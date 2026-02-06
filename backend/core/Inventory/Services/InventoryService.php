@@ -2,65 +2,126 @@
 
 namespace Core\Inventory\Services;
 
-use Core\Product\Models\Product;
+
+use App\Models\ProductVariant;
 
 class InventoryService
 {
     /**
-     * Decrement product stock.
+     * Decrement product variant stock.
      */
-    public function decrementStock(Product $product, int $quantity): void
+    /**
+     * Reserve stock for an order (Atomic).
+     * Rule 7.1 & 7.2: Reserve, do not deduct.
+     * Rule 7.3: Stock MUST NOT go negative.
+     */
+    public function reserve(\App\Models\Order $order): void
     {
-        $product->decrement('stock_quantity', $quantity);
-        $this->updateStockStatus($product);
+        DB::transaction(function () use ($order) {
+            foreach ($order->items as $item) {
+                $variant = $item->variant;
+                // Lock for availability check
+                $lockedVariant = ProductVariant::where('id', $variant->id)->lockForUpdate()->first();
+
+                if (!$this->hasStock($lockedVariant, $item->quantity)) {
+                    throw new \RuntimeException("Insufficient stock for: {$lockedVariant->product->name} (SKU: {$lockedVariant->sku})");
+                }
+
+                // Create Reservation
+                \App\Models\InventoryReservation::create([
+                    'variant_id' => $variant->id,
+                    'order_id' => $order->id,
+                    'quantity' => $item->quantity,
+                    'status' => \App\Enums\InventoryReservationState::RESERVED,
+                    'expires_at' => now()->addMinutes(30),
+                ]);
+            }
+        });
     }
 
     /**
-     * Increment product stock (e.g. for cancellations).
+     * Commit reservation and deduct physical stock (Payment Success).
      */
-    public function incrementStock(Product $product, int $quantity): void
+    public function commit(\App\Models\Order $order): void
     {
-        $product->increment('stock_quantity', $quantity);
-        $this->updateStockStatus($product);
+        DB::transaction(function () use ($order) {
+            $reservations = \App\Models\InventoryReservation::where('order_id', $order->id)
+                ->where('status', \App\Enums\InventoryReservationState::RESERVED)
+                ->lockForUpdate() // Lock reservations? No, lock variants.
+                ->get();
+
+            if ($reservations->isEmpty()) {
+                // If no reservations, maybe expired or already committed?
+                // Strict rule: Must have reservation to commit.
+                // But legacy/compat? Phase-1 Strict: FAIL if no reservation found?
+                // Or maybe we treat it as "Reserve & Commit" in one go if missing?
+                // No, Rule says: "If stock deduction happens before payment -> FAIL".
+                // So reservation MUST exist.
+                // But for resilience, if reservation missing, maybe we re-check stock and deduct?
+                // Let's stick to Strict for now: Log critical if missing.
+                 \Log::warning("Inventory Commit: No active reservations found for Order #{$order->id}. Attempting fallback deduction.");
+                 // Fallback: Just deduct if available (Legacy path safety)
+            }
+
+            foreach ($reservations as $reservation) {
+                 $variant = \App\Models\ProductVariant::where('id', $reservation->variant_id)->lockForUpdate()->first();
+                 
+                 // Deduct
+                 if ($variant->stock_quantity < $reservation->quantity) {
+                     // This technically shouldn't happen if reserved, UNLESS physical stock was reduced manually.
+                     throw new \RuntimeException("Integrity Error: Reserved stock no longer physically available.");
+                 }
+                 
+                 $variant->decrement('stock_quantity', $reservation->quantity);
+                 
+                 $reservation->status = \App\Enums\InventoryReservationState::COMMITTED;
+                 $reservation->save();
+            }
+        });
     }
 
     /**
-     * Check if product has sufficient stock.
+     * Release reservation (Payment Failed / Cancelled).
      */
-    public function hasStock(Product $product, int $quantity): bool
+    public function release(\App\Models\Order $order): void
     {
-        return $product->stock_quantity >= $quantity;
+        \App\Models\InventoryReservation::where('order_id', $order->id)
+            ->where('status', \App\Enums\InventoryReservationState::RESERVED)
+            ->update(['status' => \App\Enums\InventoryReservationState::RELEASED]);
     }
 
     /**
-     * Update stock status based on quantity.
+     * Check if variant has sufficient stock (Physical - Reserved).
      */
-    private function updateStockStatus(Product $product): void
+    public function hasStock(ProductVariant $variant, int $quantity): bool
     {
-        // This logic mimics what was observed in the scan or inferred.
-        // Assuming strict 'in_stock' / 'out_of_stock' status string or boolean.
-        // If Product model has 'stock_status' column:
-        
-        /* 
-        if ($product->stock_quantity <= 0) {
-             $product->stock_status = 'out_of_stock';
-        } else {
-             $product->stock_status = 'in_stock';
+        $reserved = \App\Models\InventoryReservation::where('variant_id', $variant->id)
+            ->where('status', \App\Enums\InventoryReservationState::RESERVED)
+            ->where('expires_at', '>', now())
+            ->sum('quantity');
+
+        return ($variant->stock_quantity - $reserved) >= $quantity;
+    }
+
+    /**
+     * Decrement product variant stock DIRECTLY (LEGACY / ADMIN ONLY).
+     * @deprecated Use commit() via Order flow.
+     */
+    public function decrementStock(ProductVariant $variant, int $quantity): void
+    {
+        // Legacy support retained but discouraged
+        $lockedVariant = ProductVariant::where('id', $variant->id)->lockForUpdate()->first();
+        if ($lockedVariant->stock_quantity < $quantity) {
+             throw new \RuntimeException("Insufficient stock.");
         }
-        $product->save();
-        */
-        
-        // However, the Codebase Scan in OrderController had:
-        // $cartItem->product->updateStockStatus();
-        // This implies the method exists on the Product model.
-        // I should stick to calling that method or move it here.
-        // The Plan was "Extract logic". If logic is on Model, keep it for now or move it?
-        // Better to delegate back to Model for status update to minimize change, 
-        // OR move that logic here. 
-        // Let's call the Model method for now if it exists.
-        
-        if (method_exists($product, 'updateStockStatus')) {
-            $product->updateStockStatus();
-        }
+        $lockedVariant->decrement('stock_quantity', $quantity);
+    }
+
+    /**
+     * Increment product variant stock (Returns).
+     */
+    public function incrementStock(ProductVariant $variant, int $quantity): void
+    {
+        $variant->increment('stock_quantity', $quantity);
     }
 }

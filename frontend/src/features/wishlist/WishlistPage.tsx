@@ -48,7 +48,9 @@ const WishlistPage: React.FC = () => {
                 return;
             }
 
-            await dispatch(addToCart({ productId: item.product_id, quantity: 1 })).unwrap();
+            // Get default variant ID for cart (variant-first architecture)
+            const variantId = item.product.variants?.[0]?.id || (item.product as any).default_variant_id;
+            await dispatch(addToCart({ productId: item.product_id, quantity: 1, variantId })).unwrap();
             await wishlistService.removeFromWishlist(item.product_id); // Optional: remove after adding
             setWishlistItems((prev) => prev.filter((i) => i.product_id !== item.product_id));
             toast.success('Moved to cart');

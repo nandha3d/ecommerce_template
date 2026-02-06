@@ -16,7 +16,7 @@ class WishlistController extends Controller
      */
     public function index()
     {
-        $wishlistItems = Wishlist::with(['product.primaryImage', 'product.brand'])
+        $wishlistItems = Wishlist::with(['product.primaryImage', 'product.brand', 'product.variants', 'product.images'])
             ->where('user_id', Auth::id())
             ->latest()
             ->get();
@@ -96,7 +96,9 @@ class WishlistController extends Controller
 
         return response()->json([
             'success' => true,
-            'in_wishlist' => $exists
+            'data' => [
+                'in_wishlist' => $exists
+            ]
         ]);
     }
 }

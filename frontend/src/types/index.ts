@@ -52,6 +52,11 @@ export interface Product {
     is_bestseller: boolean;
     is_new: boolean;
     is_active: boolean;
+    // Computed fields from API
+    effective_price?: number;
+    is_on_sale?: boolean;
+    discount_percent?: number;
+    in_stock?: boolean;
     // New fields
     is_digital?: boolean;
     is_downloadable?: boolean;
@@ -126,6 +131,10 @@ export interface ProductVariant {
     stock_quantity: number;
     attributes: Record<string, string>;
     image?: string;
+    // Computed from API
+    in_stock?: boolean;
+    discount_percent?: number;
+    effective_price?: number;
 }
 
 export interface NutritionFacts {
@@ -165,7 +174,9 @@ export interface Category {
 // Cart types
 export interface Cart {
     id: number;
+    session_id: string;
     items: CartItem[];
+    // Legacy fields (Source of Truth until backend update)
     subtotal: number;
     discount: number;
     shipping: number;
@@ -181,6 +192,7 @@ export interface CartItem {
     product: Product;
     variant?: ProductVariant;
     quantity: number;
+    // Legacy fields
     unit_price: number;
     total_price: number;
 }
@@ -358,4 +370,64 @@ export interface DashboardStats {
         labels: string[];
         data: number[];
     };
+}
+
+// Checkout types
+export interface CheckoutSession {
+    session_id: string;
+    items: CheckoutItem[];
+    pricing: CheckoutPricing;
+    flags: CheckoutFlags;
+    available_payment_methods?: string[];
+    expires_at?: string;
+}
+
+export interface CheckoutItem {
+    variant_id: number;
+    name: string;
+    quantity: number;
+    image?: string;
+    price: {
+        base: number;
+        display: {
+            amount: number;
+            currency: string;
+            formatted: string;
+        };
+        symbol: string;
+    };
+    total: {
+        base: number;
+        display: {
+            amount: number;
+            currency: string;
+            formatted: string;
+        };
+        symbol: string;
+    };
+}
+
+export interface CheckoutPricing {
+    subtotal: PriceDetail;
+    tax: PriceDetail;
+    shipping: PriceDetail;
+    discount: PriceDetail;
+    total: PriceDetail;
+}
+
+export interface PriceDetail {
+    base: number;
+    display: {
+        amount: number;
+        currency: string;
+        formatted: string;
+    };
+    symbol: string;
+}
+
+export interface CheckoutFlags {
+    can_pay: boolean;
+    payment_blocked_reason?: string;
+    requires_shipping_address: boolean;
+    requires_billing_address: boolean;
 }

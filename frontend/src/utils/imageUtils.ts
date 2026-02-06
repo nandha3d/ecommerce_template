@@ -4,7 +4,14 @@
 export const getImageUrl = (path: string | null | undefined) => {
     if (!path) return '/placeholder-product.jpg';
     if (path.startsWith('http')) return path;
-    const baseUrl = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:8000';
+
+    // Safety check for production
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (!apiUrl && import.meta.env.PROD) {
+        console.error('CRITICAL: VITE_API_URL is missing in production build!');
+    }
+
+    const baseUrl = apiUrl?.replace('/api/v1', '') || 'http://localhost:8000';
     return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
@@ -14,7 +21,35 @@ export const getImageUrl = (path: string | null | undefined) => {
  * @param quality Quality from 0 to 1 (default 0.8)
  * @returns Promise resolving to the new WebP File
  */
-export const convertToWebP = (file: File, quality = 0.8): Promise<File> => {
+export interface ImageConfig {
+    webpQuality: number;
+    maxWidth: number;
+    maxHeight: number;
+    maxSizeKB: number;
+}
+
+const IMAGE_CONFIG_DEFAULTS: ImageConfig = {
+    webpQuality: 0.8,
+    maxWidth: 2000,
+    maxHeight: 2000,
+    maxSizeKB: 1024
+};
+
+/**
+ * Converts an image file to WebP format with optimization
+ * @param file The original file
+ * @param quality Quality from 0 to 1 (default from config)
+ * @param config Optional config overrides
+ * @returns Promise resolving to the new WebP File
+ */
+export const convertToWebP = (
+    file: File,
+    quality?: number,
+    config?: ImageConfig
+): Promise<File> => {
+    const imageConfig = config || IMAGE_CONFIG_DEFAULTS;
+    const targetQuality = quality ?? imageConfig.webpQuality;
+
     return new Promise((resolve, reject) => {
         // If already WebP, return as is
         if (file.type === 'image/webp') {
@@ -64,7 +99,7 @@ export const convertToWebP = (file: File, quality = 0.8): Promise<File> => {
                         resolve(newFile);
                     },
                     'image/webp',
-                    quality
+                    targetQuality
                 );
             };
 

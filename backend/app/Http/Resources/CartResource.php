@@ -25,7 +25,11 @@ class CartResource extends JsonResource
                      if ($item->variant_id && $item->relationLoaded('variant') && $item->variant) {
                         $unitPrice = (float) ($item->variant->sale_price > 0 ? $item->variant->sale_price : $item->variant->price);
                     } elseif ($item->relationLoaded('product') && $item->product) {
-                        $unitPrice = (float) ($item->product->sale_price > 0 ? $item->product->sale_price : $item->product->price);
+                         // Try to find default variant if not linked
+                         $defaultVariant = $item->product->variants->first();
+                         if ($defaultVariant) {
+                             $unitPrice = (float) ($defaultVariant->sale_price > 0 ? $defaultVariant->sale_price : $defaultVariant->price);
+                         }
                     }
                 }
                 $healedSubtotal += $unitPrice * $item->quantity;
