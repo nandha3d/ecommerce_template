@@ -17,3 +17,8 @@ yarn-error.log
 /.vscode
 /storage/logs/*.log
 /storage/framework/cache/data
+*.zip
+temp_log_dump.txt
+test_db.php
+test_*.php
+!/.gitkeep

@@ -4,6 +4,7 @@ namespace Core\Inventory\Services;
 
 
 use App\Models\ProductVariant;
+use Illuminate\Support\Facades\DB;
 
 class InventoryService
 {
