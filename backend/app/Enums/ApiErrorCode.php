@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Enums;
+
+enum ApiErrorCode: string
+{
+    // Authentication & Authorization
+    case UNAUTHORIZED = 'UNAUTHORIZED';
+    case FORBIDDEN = 'FORBIDDEN';
+    case INVALID_CREDENTIALS = 'INVALID_CREDENTIALS';
+    
+    // Validation
+    case VALIDATION_ERROR = 'VALIDATION_ERROR';
+    
+    // Cart Errors
+    case CART_EMPTY = 'CART_EMPTY';
+    case CART_LOCKED = 'CART_LOCKED';
+    case INVALID_CART_STATE = 'INVALID_CART_STATE';
+    case CART_NOT_FOUND = 'CART_NOT_FOUND';
+    
+    // Order Errors
+    case ORDER_NOT_FOUND = 'ORDER_NOT_FOUND';
+    case INVALID_ORDER_STATE = 'INVALID_ORDER_STATE';
+    case ORDER_ALREADY_EXISTS = 'ORDER_ALREADY_EXISTS';
+    
+    // Inventory Errors
+    case INSUFFICIENT_STOCK = 'INSUFFICIENT_STOCK';
+    case PRODUCT_NOT_FOUND = 'PRODUCT_NOT_FOUND';
+    
+    // Payment Errors
+    case PAYMENT_FAILED = 'PAYMENT_FAILED';
+    case INVALID_PAYMENT_METHOD = 'INVALID_PAYMENT_METHOD';
+    case SOURCE_REQUIRED = 'SOURCE_REQUIRED';
+    case WEBHOOK_CONFIG_MISSING = 'WEBHOOK_CONFIG_MISSING';
+    case INVALID_SIGNATURE = 'INVALID_SIGNATURE';
+    case WEBHOOK_FAILED = 'WEBHOOK_FAILED';
+    case PAYMENT_ERROR = 'PAYMENT_ERROR';
+    case SESSION_EXPIRED = 'SESSION_EXPIRED';
+    
+    // Coupon Errors
+    case INVALID_COUPON = 'INVALID_COUPON';
+    case COUPON_EXPIRED = 'COUPON_EXPIRED';
+    
+    // Generic
+    case INTERNAL_ERROR = 'INTERNAL_ERROR';
+    case NOT_FOUND = 'NOT_FOUND';
+    case SERVER_ERROR = 'SERVER_ERROR';
+}

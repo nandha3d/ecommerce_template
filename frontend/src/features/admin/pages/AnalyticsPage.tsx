@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+// @ts-ignore
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Loader } from '../../components/ui';
 

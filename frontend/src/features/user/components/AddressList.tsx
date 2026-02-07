@@ -20,10 +20,21 @@ const addressSchema = z.object({
     postal_code: z.string().min(1, 'Postal code is required'),
     country: z.string().min(1, 'Country is required'),
     phone: z.string().min(1, 'Phone is required'),
-    is_default: z.boolean().optional(),
+    is_default: z.boolean(),
 });
 
-type AddressFormValues = z.infer<typeof addressSchema>;
+type AddressFormValues = {
+    type: 'billing' | 'shipping';
+    name: string;
+    address_line_1: string;
+    address_line_2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+    phone: string;
+    is_default: boolean;
+};
 
 interface AddressListProps {
     selectable?: boolean;
@@ -171,14 +182,15 @@ export const AddressList: React.FC<AddressListProps> = ({ selectable = false, se
         }
     };
 
-    const onSubmitAddress = async (data: AddressFormValues) => {
+    const onSubmitAddress = async (formData: any) => {
         try {
+            const data = formData as AddressFormValues;
             let savedAddress;
             if (editingAddress) {
                 savedAddress = await orderService.updateAddress(editingAddress.id, data);
                 toast.success('Address updated');
             } else {
-                savedAddress = await orderService.createAddress(data);
+                savedAddress = await orderService.createAddress(data as any);
                 toast.success('Address added');
             }
             setShowForm(false);

@@ -9,6 +9,7 @@ use Core\Pricing\Services\RuleEngine;
 use Core\Base\Events\EventBus;
 use Core\Boot\CoreBootstrapper;
 use Illuminate\Support\Facades\DB;
+use App\Infrastructure\Env\EnvValidator;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -69,6 +70,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // CRITICAL: Validate environment first - app MUST crash if misconfigured
+        EnvValidator::validate();
+
         /** @var EventBus $eventBus */
         $eventBus = $this->app->make(EventBus::class);
         

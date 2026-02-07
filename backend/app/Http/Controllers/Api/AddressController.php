@@ -22,12 +22,11 @@ class AddressController extends Controller
      */
     public function index()
     {
+        $this->authorize('viewAny', Address::class);
+
         $addresses = Auth::user()->addresses()->orderBy('is_default', 'desc')->get();
         
-        return response()->json([
-            'success' => true,
-            'data' => $addresses
-        ]);
+        return $this->success($addresses, 'Addresses retrieved');
     }
 
     /**
@@ -35,6 +34,8 @@ class AddressController extends Controller
      */
     public function store(Request $request)
     {
+        $this->authorize('create', Address::class);
+
         $validated = $request->validate([
             'type' => 'required|in:billing,shipping',
             'name' => 'required|string|max:255',
@@ -51,11 +52,7 @@ class AddressController extends Controller
         // Enhanced Validation
         $validationResult = $this->validationService->validate($validated);
         if (!$validationResult['isValid']) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validationResult['errors']
-            ], 422);
+            return $this->error('Validation failed', 'VALIDATION_ERROR', 422, $validationResult['errors']);
         }
         
         // Use normalized data
@@ -73,11 +70,7 @@ class AddressController extends Controller
 
         $address = $user->addresses()->create($validated);
 
-        return response()->json([
-            'success' => true,
-            'data' => $address,
-            'message' => 'Address created successfully'
-        ], 201);
+        return $this->success($address, 'Address created successfully', 201);
     }
 
     /**
@@ -85,12 +78,11 @@ class AddressController extends Controller
      */
     public function show(string $id)
     {
-        $address = Auth::user()->addresses()->findOrFail($id);
+        $address = Address::findOrFail($id);
+        
+        $this->authorize('view', $address);
 
-        return response()->json([
-            'success' => true,
-            'data' => $address
-        ]);
+        return $this->success($address, 'Address retrieved');
     }
 
     /**
@@ -98,7 +90,9 @@ class AddressController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        $address = Auth::user()->addresses()->findOrFail($id);
+        $address = Address::findOrFail($id);
+        
+        $this->authorize('update', $address);
 
         $validated = $request->validate([
             'type' => 'in:billing,shipping',
@@ -122,11 +116,7 @@ class AddressController extends Controller
 
         $address->update($validated);
 
-        return response()->json([
-            'success' => true,
-            'data' => $address,
-            'message' => 'Address updated successfully'
-        ]);
+        return $this->success($address, 'Address updated successfully');
     }
 
     /**
@@ -134,7 +124,9 @@ class AddressController extends Controller
      */
     public function destroy(string $id)
     {
-        $address = Auth::user()->addresses()->findOrFail($id);
+        $address = Address::findOrFail($id);
+        
+        $this->authorize('delete', $address);
         
         // If deleting default address, make another one default if exists
         $wasDefault = $address->is_default;
@@ -152,10 +144,7 @@ class AddressController extends Controller
             }
         }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Address deleted successfully'
-        ]);
+        return $this->success(null, 'Address deleted successfully');
     }
 
     /**
@@ -163,7 +152,9 @@ class AddressController extends Controller
      */
     public function setDefault(Request $request, string $id)
     {
-        $address = Auth::user()->addresses()->findOrFail($id);
+        $address = Address::findOrFail($id);
+        
+        $this->authorize('setDefault', $address);
         
         Auth::user()->addresses()
             ->where('type', $address->type)
@@ -171,10 +162,6 @@ class AddressController extends Controller
             
         $address->update(['is_default' => true]);
 
-        return response()->json([
-            'success' => true,
-            'data' => $address,
-            'message' => 'Address set as default'
-        ]);
+        return $this->success($address, 'Address set as default');
     }
 }

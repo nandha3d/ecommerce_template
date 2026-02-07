@@ -3,45 +3,39 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Order;
-use App\Models\OrderItem;
-use App\Models\Cart;
-use App\Models\Address;
 use App\Http\Resources\OrderResource;
+use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Core\Order\Actions\CreateOrderAction;
-use Core\Inventory\Services\InventoryService;
 use App\Services\OrderService;
+use App\Services\CheckoutService;
+use Illuminate\Support\Facades\Log;
+use App\Enums\ApiErrorCode;
+
 
 class OrderController extends Controller
 {
     private OrderService $orderService;
-    private \Core\Cart\Services\CartService $cartService;
-    private \App\Services\CheckoutService $checkoutService;
+    private CheckoutService $checkoutService;
 
     public function __construct(
         OrderService $orderService,
-        \Core\Cart\Services\CartService $cartService,
-        \App\Services\CheckoutService $checkoutService
+        CheckoutService $checkoutService
     ) {
         $this->orderService = $orderService;
-        $this->cartService = $cartService;
         $this->checkoutService = $checkoutService;
     }
-
-    // ... (index, show, showByNumber methods remain the same) ...
 
     /**
      * List user's orders.
      */
     public function index(Request $request): JsonResponse
     {
+        $this->authorize('viewAny', Order::class);
+        
         $orders = $this->orderService->getUserOrders(auth()->user());
 
-        return response()->json([
-            'data' => OrderResource::collection($orders),
+        return $this->success(OrderResource::collection($orders), 'Orders retrieved', 200, [
             'meta' => [
                 'current_page' => $orders->currentPage(),
                 'last_page' => $orders->lastPage(),
@@ -56,19 +50,15 @@ class OrderController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $order = $this->orderService->getOrderById($id, auth()->user());
+        $order = $this->orderService->getOrderById($id);
 
         if (!$order) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Order not found',
-            ], 404);
+            return $this->error('Order not found', ApiErrorCode::ORDER_NOT_FOUND->value, 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => new OrderResource($order),
-        ]);
+        $this->authorize('view', $order);
+
+        return $this->success(new OrderResource($order));
     }
 
     /**
@@ -76,19 +66,15 @@ class OrderController extends Controller
      */
     public function showByNumber(string $orderNumber): JsonResponse
     {
-        $order = $this->orderService->getOrderByNumber($orderNumber, auth()->user());
+        $order = $this->orderService->getOrderByNumber($orderNumber);
 
         if (!$order) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Order not found',
-            ], 404);
+            return $this->error('Order not found', ApiErrorCode::ORDER_NOT_FOUND->value, 404);
         }
 
-        return response()->json([
-            'success' => true,
-            'data' => new OrderResource($order),
-        ]);
+        $this->authorize('view', $order);
+
+        return $this->success(new OrderResource($order));
     }
 
     /**
@@ -96,8 +82,10 @@ class OrderController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $this->authorize('create', Order::class);
+
         $request->validate([
-            'payment_method' => 'required|string|in:card,paypal,cod',
+            'payment_method' => 'required|string|in:card,paypal,cod,razorpay',
             'billing_address_id' => 'sometimes|exists:addresses,id',
             'shipping_address_id' => 'sometimes|exists:addresses,id',
             'billing_address' => 'sometimes|array',
@@ -113,33 +101,20 @@ class OrderController extends Controller
         ]);
 
         $user = auth()->user();
-
-        // --- IDEMPOTENCY CHECK (Rule 9) ---
         $idempotencyKey = $request->header('Idempotency-Key');
+
         if ($idempotencyKey) {
             $existingOrder = $this->orderService->getOrderByIdempotencyKey($idempotencyKey, $user);
             if ($existingOrder) {
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Order already processed (Idempotent)',
-                    'data' => new OrderResource($existingOrder),
-                ], 200);
+                return $this->success(new OrderResource($existingOrder), 'Order already processed (Idempotent)');
             }
         }
 
-        // Use CartService to fetch the cart, handling both User ID and Session ID
-        // This ensures pending guest carts (not yet merged) are found if the session ID is present
         $sessionId = $request->header('X-Cart-Session');
-        $cart = $this->cartService->getCart($user->id, $sessionId);
-
-        // Eager load items for validation
-        $cart->load(['items.product', 'items.variant', 'coupon']);
+        $cart = app(\Core\Cart\Services\CartService::class)->getCart($user->id, $sessionId);
 
         if (!$cart || $cart->items->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cart is empty',
-            ], 400);
+            return $this->error('Cart is empty', ApiErrorCode::CART_EMPTY->value, 400);
         }
 
         try {
@@ -151,169 +126,33 @@ class OrderController extends Controller
             $result = $this->checkoutService->placeOrder($user, $cart, $orderData);
             $order = $result['order'];
 
-            return response()->json([
-                'success' => true,
-                'message' => isset($result['is_idempotent']) ? 'Order already processed (Idempotent)' : 'Order placed successfully',
-                'data' => new OrderResource($order->load(['items.product', 'billingAddress', 'shippingAddress'])),
+            return $this->success([
+                'order' => new OrderResource($order->load(['items.product', 'billingAddress', 'shippingAddress'])),
                 'client_secret' => $result['client_secret'] ?? null,
-            ], $order->wasRecentlyCreated ? 201 : 200);
+            ], isset($result['is_idempotent']) ? 'Order already processed (Idempotent)' : 'Order placed successfully', 201);
 
         } catch (\Exception $e) {
             Log::error('Order creation failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to create order: ' . $e->getMessage(),
-            ], 500);
+            return $this->error('Failed to create order: ' . $e->getMessage(), ApiErrorCode::ORDER_ALREADY_EXISTS->value, 500);
         }
     }
 
     /**
-     * Validate order before creation (Phase 1: Order Validation Contract).
+     * Validate order before creation.
      */
     public function validateOrder(Request $request): JsonResponse
     {
-        $user = auth()->user();
-        $sessionId = $request->header('X-Cart-Session');
-        $cart = $this->cartService->getCart($user->id, $sessionId);
+        $this->authorize('create', Order::class);
 
-        $cart->load(['items.product', 'items.variant', 'coupon']);
-
-        if (!$cart || $cart->items->isEmpty()) {
-            return response()->json([
-                'success' => false, // validation_status: invalid
-                'validation_status' => 'invalid',
-                'reasons' => ['Cart is empty'],
-            ], 422);
+        try {
+            $result = $this->checkoutService->validateOrder(auth()->user(), $request->header('X-Cart-Session'));
+            return $this->success($result, 'Order validated');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::VALIDATION_ERROR->value, 422);
+        } catch (\Exception $e) {
+            Log::error('Order validation error', ['error' => $e->getMessage()]);
+            return $this->error('Internal server error', ApiErrorCode::SERVER_ERROR->value, 500);
         }
-
-        // 1. Validate Inventory & Prices (Recalculate)
-        $reasons = [];
-        $healedSubtotal = 0;
-        $hashItems = [];
-
-        foreach ($cart->items as $item) {
-            // Price Check
-            $unitPrice = (float) $item->unit_price;
-            if ($unitPrice <= 0) {
-                if ($item->variant) {
-                    $unitPrice = (float) ($item->variant->sale_price > 0 ? $item->variant->sale_price : $item->variant->price);
-                } elseif ($item->product) {
-                    $defaultVariant = $item->product->variants->first();
-                    if ($defaultVariant) {
-                        $unitPrice = (float) ($defaultVariant->sale_price > 0 ? $defaultVariant->sale_price : $defaultVariant->price);
-                    }
-                }
-            }
-            // Check for Price Drift (Optional: if we want to enforce it matched exactly what was in DB)
-            // For now, we trust the 'healed' price as the Authoritative Price.
-
-            // Stock Check
-            $stock = 0;
-            if ($item->variant) {
-                $stock = $item->variant->stock; // Assuming stock field exists
-            }
-
-            if ($stock < $item->quantity) {
-                $reasons[] = "Item '{$item->product_name}' is out of stock (Requested: {$item->quantity}, Available: {$stock})";
-            }
-
-            $healedSubtotal += $unitPrice * $item->quantity;
-            $hashItems[] = $item->id . ':' . $item->quantity . ':' . $unitPrice;
-        }
-
-        if (!empty($reasons)) {
-            return response()->json([
-                'success' => false,
-                'validation_status' => 'invalid',
-                'reasons' => $reasons,
-            ], 422);
-        }
-
-        // 2. Calculate Totals Authoritatively
-        $discount = (float) $cart->discount; // Recalculate if coupon is applied? Ideally yes.
-        $shipping = (float) $cart->shipping; // Recalculate via ShippingService? Ideally yes.
-        $tax = (float) ($healedSubtotal * 0.18); // Example fixed tax, replace with TaxService later
-        // Note: For Phase 1 strictness, we should use what's in Cart or Recalculate. 
-        // Using Cart values for now but assuming they are refreshed by CartService previously.
-        // Actually, let's trust $cart values for shipping/tax but 'healedSubtotal' for price.
-
-        $total = $healedSubtotal + $cart->shipping + $cart->tax - $discount;
-
-        // 3. Currency Authority
-        $currency = \App\Models\Currency::where('is_base', true)->firstOr(function () {
-            return new \App\Models\Currency(['code' => 'USD', 'symbol' => '$', 'decimal_places' => 2]);
-        });
-
-        // 4. Create/Update Checkout Lock (Phase 2: Checkout Lock)
-        // We Snapshot EVERYTHING.
-
-        $sessionData = [
-            'items' => array_map(function ($item) {
-                // Determine price again or use healed price from above
-                $unitPrice = (float) $item->unit_price;
-                if ($unitPrice <= 0) {
-                    if ($item->variant) {
-                        $unitPrice = (float) ($item->variant->sale_price > 0 ? $item->variant->sale_price : $item->variant->price);
-                    } elseif ($item->product) {
-                        $defaultVariant = $item->product->variants->first();
-                        if ($defaultVariant) {
-                            $unitPrice = (float) ($defaultVariant->sale_price > 0 ? $defaultVariant->sale_price : $defaultVariant->price);
-                        }
-                    }
-                }
-
-                return [
-                    'product_id' => $item->product_id,
-                    'variant_id' => $item->variant_id,
-                    'product_name' => $item->product->name ?? 'Unknown',
-                    'variant_name' => $item->variant->name ?? null,
-                    'sku' => $item->variant->sku ?? null,
-                    'quantity' => $item->quantity,
-                    'unit_price' => $unitPrice,
-                    'total' => $unitPrice * $item->quantity,
-                    'image' => $item->product->images->first()->url ?? null,
-                ];
-            }, $cart->items->all()),
-            'coupon_id' => $cart->coupon_id,
-            'coupon_code' => $cart->coupon->code ?? null,
-        ];
-
-        // Create or Update Session
-        // We use the cart's session_id as a reference or create a new unique checkout session
-        $checkoutSession = \App\Models\CheckoutSession::updateOrCreate(
-            ['cart_id' => $cart->id, 'step' => 'validation'], // Simple state tracking
-            [
-                'user_id' => $user->id,
-                'subtotal' => $healedSubtotal,
-                'discount' => $discount,
-                'shipping_cost' => $shipping,
-                'tax_amount' => $tax,
-                'total' => $total,
-                'currency' => $currency->code,
-                'data' => $sessionData,
-                'expires_at' => now()->addMinutes(15),
-                'started_at' => now(),
-            ]
-        );
-
-        return response()->json([
-            'success' => true,
-            'validation_status' => 'valid',
-            'checkout_id' => $checkoutSession->id, // The LOCK ID
-            'recalculated_totals' => [
-                'subtotal' => $healedSubtotal,
-                'tax' => $tax,
-                'shipping' => $shipping,
-                'discount' => $discount,
-                'total' => $total,
-            ],
-            'locked_currency' => [
-                'code' => $currency->code,
-                'symbol' => $currency->symbol,
-                'precision' => $currency->decimal_places ?? 2,
-            ],
-            'expires_at' => $checkoutSession->expires_at->toIso8601String(),
-        ]);
     }
 
     /**
@@ -321,29 +160,20 @@ class OrderController extends Controller
      */
     public function cancel(int $id): JsonResponse
     {
-        $order = $this->orderService->getOrderById($id, auth()->user());
+        $order = $this->orderService->getOrderById($id);
 
         if (!$order) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Order not found',
-            ], 404);
+            return $this->error('Order not found', ApiErrorCode::ORDER_NOT_FOUND->value, 404);
         }
+
+        $this->authorize('cancel', $order);
 
         try {
             $order = $this->orderService->cancelOrder($order);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Order cancelled successfully',
-                'data' => new OrderResource($order),
-            ]);
-
+            return $this->success(new OrderResource($order), 'Order cancelled successfully');
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 400);
+            return $this->error($e->getMessage(), ApiErrorCode::INTERNAL_ERROR->value, 400);
         }
     }
 }
+

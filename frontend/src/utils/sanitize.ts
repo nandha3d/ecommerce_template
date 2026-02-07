@@ -1,158 +1,97 @@
-/**
- * XSS Sanitization Utilities
- * Prevents cross-site scripting attacks in user-generated content
- */
+import DOMPurify from 'dompurify';
 
 /**
- * HTML entities map for escaping
+ * Configuration for HTML sanitization
+ * 
+ * ALLOWED_TAGS: Only these HTML tags will be permitted
+ * ALLOWED_ATTR: Only these attributes will be permitted
  */
-const HTML_ENTITIES: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#x27;',
-    '/': '&#x2F;',
-    '`': '&#x60;',
-    '=': '&#x3D;',
+const SANITIZE_CONFIG = {
+    ALLOWED_TAGS: [
+        // Text formatting
+        'p', 'br', 'strong', 'em', 'u', 'i', 'b',
+        // Headings
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        // Lists
+        'ul', 'ol', 'li',
+        // Links (but sanitized)
+        'a',
+        // Other safe elements
+        'blockquote', 'code', 'pre',
+        'div', 'span',
+        // Tables
+        'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    ],
+    ALLOWED_ATTR: [
+        'href',   // For links
+        'class',  // For styling
+        'id',     // For styling
+        'target', // For links
+        'rel',    // For links
+    ],
+    // Additional security settings
+    ALLOW_DATA_ATTR: false,      // Block data-* attributes
+    ALLOW_UNKNOWN_PROTOCOLS: false, // Block javascript: and data: URLs
+    FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed'],
+    FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
 };
 
 /**
- * Escape HTML special characters to prevent XSS
+ * Sanitize HTML content to prevent XSS attacks
+ * 
+ * @param dirty - Potentially unsafe HTML string
+ * @returns Safe HTML string with malicious content removed
  */
-export const escapeHtml = (str: string): string => {
-    if (!str || typeof str !== 'string') return '';
-    return str.replace(/[&<>"'`=/]/g, (char) => HTML_ENTITIES[char] || char);
-};
-
-/**
- * Sanitize URL to prevent javascript: protocol attacks
- */
-export const sanitizeUrl = (url: string): string => {
-    if (!url || typeof url !== 'string') return '';
-
-    const trimmed = url.trim().toLowerCase();
-
-    // Block dangerous protocols
-    const dangerousProtocols = ['javascript:', 'data:', 'vbscript:'];
-    if (dangerousProtocols.some(protocol => trimmed.startsWith(protocol))) {
+export const sanitizeHtml = (dirty: string | undefined | null): string => {
+    if (!dirty) {
         return '';
     }
 
-    // Allow safe protocols
-    const safeProtocols = ['http:', 'https:', 'mailto:', 'tel:', '/'];
-    if (safeProtocols.some(protocol => trimmed.startsWith(protocol)) || !trimmed.includes(':')) {
-        return url;
+    // Sanitize the HTML
+    const clean = DOMPurify.sanitize(dirty, SANITIZE_CONFIG);
+
+    return clean;
+};
+
+/**
+ * Sanitize HTML for product descriptions (stricter rules)
+ * 
+ * @param dirty - Potentially unsafe HTML string
+ * @returns Safe HTML string suitable for product descriptions
+ */
+export const sanitizeProductDescription = (dirty: string | undefined | null): string => {
+    if (!dirty) {
+        return '';
     }
 
-    return '';
-};
-
-/**
- * Strip all HTML tags from a string
- */
-export const stripHtml = (html: string): string => {
-    if (!html || typeof html !== 'string') return '';
-    return html.replace(/<[^>]*>/g, '');
-};
-
-/**
- * Allowed HTML tags for rich text (whitelist approach)
- */
-const ALLOWED_TAGS = new Set([
-    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
-    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'ul', 'ol', 'li',
-    'a', 'span', 'div',
-    'table', 'thead', 'tbody', 'tr', 'th', 'td',
-]);
-
-/**
- * Allowed attributes for HTML tags (whitelist approach)
- */
-const ALLOWED_ATTRS: Record<string, Set<string>> = {
-    a: new Set(['href', 'title', 'target', 'rel']),
-    img: new Set(['src', 'alt', 'width', 'height']),
-    '*': new Set(['class', 'id']),
-};
-
-/**
- * Sanitize HTML allowing only safe tags and attributes
- * For heavy-duty sanitization, consider using DOMPurify
- */
-export const sanitizeHtml = (html: string): string => {
-    if (!html || typeof html !== 'string') return '';
-
-    // Create a temporary DOM to parse HTML
-    if (typeof DOMParser === 'undefined') {
-        // Server-side: just strip all tags
-        return stripHtml(html);
-    }
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    const sanitizeNode = (node: Node): void => {
-        if (node.nodeType === Node.ELEMENT_NODE) {
-            const element = node as Element;
-            const tagName = element.tagName.toLowerCase();
-
-            // Remove disallowed tags
-            if (!ALLOWED_TAGS.has(tagName)) {
-                element.remove();
-                return;
-            }
-
-            // Remove disallowed attributes
-            const allowedAttrs = new Set([
-                ...(ALLOWED_ATTRS[tagName] || []),
-                ...(ALLOWED_ATTRS['*'] || []),
-            ]);
-
-            Array.from(element.attributes).forEach(attr => {
-                if (!allowedAttrs.has(attr.name)) {
-                    element.removeAttribute(attr.name);
-                }
-
-                // Sanitize href attributes
-                if (attr.name === 'href') {
-                    const sanitized = sanitizeUrl(attr.value);
-                    if (sanitized) {
-                        element.setAttribute('href', sanitized);
-                        // Add rel="noopener noreferrer" for external links
-                        if (sanitized.startsWith('http')) {
-                            element.setAttribute('rel', 'noopener noreferrer');
-                        }
-                    } else {
-                        element.removeAttribute('href');
-                    }
-                }
-            });
-        }
-
-        // Recursively sanitize children
-        Array.from(node.childNodes).forEach(sanitizeNode);
+    const strictConfig = {
+        ...SANITIZE_CONFIG,
+        ALLOWED_TAGS: [
+            'p', 'br', 'strong', 'em', 'u',
+            'h1', 'h2', 'h3',
+            'ul', 'ol', 'li',
+        ],
+        ALLOWED_ATTR: ['class'],
     };
 
-    sanitizeNode(doc.body);
-    return doc.body.innerHTML;
+    const clean = DOMPurify.sanitize(dirty, strictConfig);
+
+    return clean;
 };
 
 /**
- * Safe JSON parse with error handling
+ * Hook for using sanitized HTML in React components
+ * 
+ * @param html - Potentially unsafe HTML string
+ * @returns Object suitable for dangerouslySetInnerHTML
  */
-export const safeJsonParse = <T>(json: string, fallback: T): T => {
-    try {
-        return JSON.parse(json) as T;
-    } catch {
-        return fallback;
-    }
+export const useSanitizedHtml = (html: string | undefined | null) => {
+    return { __html: sanitizeHtml(html) };
 };
 
-export default {
-    escapeHtml,
-    sanitizeUrl,
-    stripHtml,
-    sanitizeHtml,
-    safeJsonParse,
+/**
+ * Hook for using sanitized product descriptions
+ */
+export const useSanitizedProductDescription = (html: string | undefined | null) => {
+    return { __html: sanitizeProductDescription(html) };
 };
