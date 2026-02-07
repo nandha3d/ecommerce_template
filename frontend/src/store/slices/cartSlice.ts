@@ -23,7 +23,14 @@ export const fetchCart = createAsyncThunk(
             const cart = await cartService.getCart();
             return cart;
         } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || 'Failed to fetch cart');
+            const message = error.response?.data?.message || 'Failed to fetch cart';
+            // Backend may return "Cart is empty" when there is no cart yet.
+            // In the UI this is a valid state (empty cart), not an error.
+            if (typeof message === 'string' && /cart is empty/i.test(message)) {
+                return null;
+            }
+
+            return rejectWithValue(message);
         }
     }
 );
@@ -118,7 +125,16 @@ const cartSlice = createSlice({
             })
             .addCase(fetchCart.rejected, (state, action) => {
                 state.isLoading = false;
-                state.error = action.payload as string;
+                const message = action.payload as string;
+
+                // Treat "Cart is empty" as a normal state (not an error toast trigger).
+                if (typeof message === 'string' && /cart is empty/i.test(message)) {
+                    state.cart = null;
+                    state.error = null;
+                    return;
+                }
+
+                state.error = message;
             })
             // Add to Cart
             .addCase(addToCart.pending, (state) => {

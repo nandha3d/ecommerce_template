@@ -123,10 +123,66 @@ class Order extends Model
                 }
             }
             
-            // State transitions must go through StateMachine (Blocked here? No, model doesn't know source)
-            // But we can implicitly trust if the updated_at changes. 
-            // We can't easily block specific callers here without complex trace analysis.
-            // The "OrderStateMachine" requirement comes later.
+            // State transitions strict check
+            if ($order->isDirty('status')) {
+                $oldStatus = $order->getOriginal('status');
+                $newStatus = $order->status;
+                
+                // Allow same status (idempotent updates)
+                if ($oldStatus === $newStatus) {
+                    return;
+                }
+                
+                // Define Valid Transitions
+                // From => [To list]
+                $validTransitions = [
+                    \App\Enums\OrderState::PENDING => [
+                        \App\Enums\OrderState::PAID, 
+                        \App\Enums\OrderState::CANCELLED,
+                        \App\Enums\OrderState::FAILED
+                    ],
+                    \App\Enums\OrderState::PAID => [
+                        \App\Enums\OrderState::PROCESSING, // If applicable
+                        \App\Enums\OrderState::SHIPPED,
+                        \App\Enums\OrderState::COMPLETED,
+                        \App\Enums\OrderState::REFUNDED,
+                    ],
+                    \App\Enums\OrderState::PROCESSING => [
+                        \App\Enums\OrderState::SHIPPED,
+                        \App\Enums\OrderState::COMPLETED, // Digital goods?
+                        \App\Enums\OrderState::REFUNDED,
+                    ],
+                    \App\Enums\OrderState::SHIPPED => [
+                        \App\Enums\OrderState::COMPLETED,
+                        \App\Enums\OrderState::REFUNDED, // Returned
+                    ],
+                    \App\Enums\OrderState::COMPLETED => [
+                         \App\Enums\OrderState::REFUNDED, // Allowed? Maybe.
+                    ],
+                    \App\Enums\OrderState::CANCELLED => [], // Terminal
+                    \App\Enums\OrderState::FAILED => [], // Terminal
+                    \App\Enums\OrderState::REFUNDED => [], // Terminal
+                ];
+                
+                // If old status is not in map (e.g. unknown state), allow moving to FAILED/CANCELLED for safety? 
+                // Or deny. Strict = Deny.
+                
+                $allowed = $validTransitions[$oldStatus->value ?? $oldStatus] ?? [];
+                
+                // Handle Enum objects vs strings if necessary
+                $newStatusVal = $newStatus instanceof \UnitEnum ? $newStatus->value : $newStatus;
+                $allowedVals = array_map(fn($s) => $s instanceof \UnitEnum ? $s->value : $s, $allowed);
+                
+                if (!in_array($newStatusVal, $allowedVals)) {
+                     \Log::critical("SECURITY: Illegal State Transition", [
+                        'order_id' => $order->id,
+                        'from' => $oldStatus,
+                        'to' => $newStatus,
+                        'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3)
+                    ]);
+                    throw new \RuntimeException("Illegal State Transition: Cannot move from {$oldStatus} to {$newStatus}");
+                }
+            }
         });
         
         static::deleting(function ($order) {

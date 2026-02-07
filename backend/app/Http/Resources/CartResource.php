@@ -17,6 +17,7 @@ class CartResource extends JsonResource
         // Calculate healed subtotal
         $items = $this->whenLoaded('items');
         $healedSubtotal = 0;
+        $hashItems = [];
         
         if ($items instanceof \Illuminate\Support\Collection) {
             foreach ($items as $item) {
@@ -33,10 +34,31 @@ class CartResource extends JsonResource
                     }
                 }
                 $healedSubtotal += $unitPrice * $item->quantity;
+                $hashItems[] = $item->id . ':' . $item->quantity . ':' . $unitPrice;
             }
         } else {
              $healedSubtotal = (float) $this->subtotal;
         }
+
+        $total = (float) ($healedSubtotal + $this->shipping + $this->tax - $this->discount);
+        
+        // Authoritative Currency (Fetch Base for now, later support multi-currency carts)
+        // Ideally this should come from a service or cached singleton
+        $currency = \App\Models\Currency::where('is_base', true)->firstOr(function() {
+             return new \App\Models\Currency([
+                 'code' => 'USD', 'symbol' => '$', 'precision' => 2, 'decimal_places' => 2
+             ]);
+        });
+
+        // Generate Tamper-Proof Hash
+        $hashData = [
+            'id' => $this->id,
+            'items' => implode('|', $hashItems),
+            'total' => (string)$total,
+            'currency' => $currency->code,
+            'secret' => config('app.key')
+        ];
+        $cartHash = hash('sha256', json_encode($hashData));
 
         return [
             'id' => $this->id,
@@ -48,7 +70,17 @@ class CartResource extends JsonResource
             'discount' => (float) $this->discount,
             'shipping' => (float) $this->shipping,
             'tax' => (float) $this->tax,
-            'total' => (float) ($healedSubtotal + $this->shipping + $this->tax - $this->discount), // Recalculate total
+            'total' => $total,
+            
+            // STRICT CONTRACT FIELDS
+            'currency' => [
+                'code' => $currency->code,
+                'symbol' => $currency->symbol,
+                'precision' => $currency->decimal_places ?? 2,
+            ],
+            'price_locked' => false, // TODO: Implement checkout lock logic
+            'cart_hash' => $cartHash,
+            
             'coupon' => $this->whenLoaded('coupon'),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

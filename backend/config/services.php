@@ -16,8 +16,8 @@ return [
     ],
 
     'razorpay' => [
-        'key_id' => env('RAZORPAY_KEY', 'rzp_test_SAWDGjzlq4Lbmg'),
-        'key_secret' => env('RAZORPAY_SECRET', '08TezjIUsWPKLtYeu7evQKj0'),
+        'key_id' => env('RAZORPAY_KEY_ID', 'rzp_test_SCtZeLvJHObiCH'),
+        'key_secret' => env('RAZORPAY_KEY_SECRET', 'A9U9g3YrQmwyPnUrK7Rhkiaq'),
         'currency' => env('RAZORPAY_CURRENCY', 'INR'),
     ],
 

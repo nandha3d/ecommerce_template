@@ -18,10 +18,10 @@ import { GlobalizationProvider } from './context/GlobalizationContext';
 // Pages
 import { HomePage, ProductsPage, ProductDetailPage } from './features/products';
 import { CartPage } from './features/cart';
-import { CheckoutPage } from './features/checkout';
+import { CheckoutPage, OrderConfirmationPage } from './features/checkout';
 import { LoginPage, RegisterPage } from './features/auth';
 import { ProfilePage } from './features/user';
-import { OrderHistoryPage } from './features/orders';
+import { OrderHistoryPage, OrderDetailsPage } from './features/orders';
 import { WishlistPage } from './features/wishlist';
 import AdminThemeProvider from './features/admin/theme/AdminThemeProvider';
 
@@ -155,11 +155,15 @@ const AppRoutes: React.FC = () => {
                       path="/checkout/success"
                       element={
                         <ProtectedRoute requireAuth>
-                          <div className="container mx-auto px-4 py-16 text-center">
-                            <div className="text-6xl mb-4">✅</div>
-                            <h1 className="text-3xl font-bold text-primary-900 mb-4">Order Placed Successfully!</h1>
-                            <p className="text-neutral-600">Thank you for your order. You will receive a confirmation email shortly.</p>
-                          </div>
+                          <OrderConfirmationPage />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/account/orders/:id"
+                      element={
+                        <ProtectedRoute requireAuth>
+                          <OrderDetailsPage />
                         </ProtectedRoute>
                       }
                     />

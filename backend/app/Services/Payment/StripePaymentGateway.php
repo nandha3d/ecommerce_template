@@ -26,6 +26,36 @@ class StripePaymentGateway implements PaymentGatewayInterface
         }
     }
 
+    public function createIntent(float $amount, string $currency, array $options = []): array
+    {
+        try {
+            $amountInSmallestUnit = $this->getAmountInSmallestUnit($amount, $currency);
+
+            $paymentIntent = $this->stripe->paymentIntents->create([
+                'amount' => $amountInSmallestUnit,
+                'currency' => strtolower($currency),
+                'automatic_payment_methods' => ['enabled' => true],
+                'description' => $options['description'] ?? 'Order Payment',
+                'metadata' => $options['metadata'] ?? [],
+            ]);
+
+            return [
+                'success' => true,
+                'client_secret' => $paymentIntent->client_secret,
+                'transaction_id' => $paymentIntent->id,
+                'status' => $paymentIntent->status,
+                'data' => $paymentIntent->toArray(),
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Stripe Intent Creation Failed: ' . $e->getMessage());
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+            ];
+        }
+    }
     public function charge(float $amount, string $currency, string $source, array $options = []): array
     {
         try {

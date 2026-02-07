@@ -9,19 +9,20 @@ use Illuminate\Support\Facades\Log;
 
 class PaymentService
 {
-    private PaymentGatewayInterface $gateway;
     private ConfigurationService $config;
 
     public function __construct(ConfigurationService $config)
     {
         $this->config = $config;
-        $this->gateway = $this->resolveGateway();
     }
 
-    private function resolveGateway(): PaymentGatewayInterface
+    private function resolveGateway(string $method = 'card'): PaymentGatewayInterface
     {
-        // Could be dynamic based on user selection or config
-        // For now default to Stripe as per plan
+        if ($method === 'razorpay') {
+            return app(\App\Services\Payment\RazorpayPaymentGateway::class);
+        }
+        
+        // Default to Stripe
         return app(StripePaymentGateway::class);
     }
 
@@ -42,23 +43,105 @@ class PaymentService
             'currency' => $order->currency ?? 'USD',
             'status' => \App\Enums\PaymentIntentState::CREATED,
             'payment_method' => $method,
+            'metadata' => ['order_id' => $order->id],
         ]);
 
+        return $this->executeCharge($intent, $source, "Order #{$order->order_number}");
+    }
+
+    /**
+     * Process payment for a Checkout Session (Phase 3: Strict Flow)
+     */
+    public function processCheckoutPayment(\App\Models\CheckoutSession $session, string $source, string $method = 'card', array $options = []): array
+    {
+        Log::info("Processing payment for Checkout Session #{$session->id}");
+        
+        // Check for existing successful intent for this session
+        // We look in metadata for checkout_session_id
+        // NOTE: This relies on metadata querying, which is slow but safe for now.
+        // Ideally we added checkout_session_id column.
+        
+        // Create PaymentIntent
+        $intent = \App\Models\PaymentIntent::create([
+            'amount' => $session->total,
+            'currency' => $session->currency,
+            'status' => \App\Enums\PaymentIntentState::CREATED,
+            'payment_method' => $method,
+            'metadata' => array_merge([
+                'checkout_session_id' => $session->id,
+                'cart_id' => $session->cart_id
+            ], $options),
+        ]);
+
+        return $this->executeCharge($intent, $source, "Checkout #{$session->id}");
+    }
+
+    /**
+     * Create Intent for Checkout Session (Phase 3: Pre-Payment Strict Flow)
+     * Returns client_secret for frontend elements.
+     */
+    public function createCheckoutIntent(\App\Models\CheckoutSession $session, string $method = 'card'): array
+    {
+        Log::info("Creating Payment Intent for Checkout Session #{$session->id} via {$method}");
+        
+        $gateway = $this->resolveGateway($method);
+        
+        $gatewayIntent = $gateway->createIntent(
+            $session->total,
+            $session->currency,
+            [
+                'description' => "Checkout #{$session->id}",
+                'metadata' => [
+                    'checkout_session_id' => $session->id,
+                    'cart_id' => $session->cart_id
+                ]
+            ]
+        );
+        
+        if (!$gatewayIntent['success']) {
+            throw new \RuntimeException("Failed to create payment intent: " . ($gatewayIntent['message'] ?? 'Unknown error'));
+        }
+
+        // Create Local PaymentIntent Record
+        $intent = \App\Models\PaymentIntent::create([
+            'amount' => $session->total,
+            'currency' => $session->currency,
+            'status' => \App\Enums\PaymentIntentState::CREATED,
+            'payment_method' => $method,
+            'gateway_id' => $gatewayIntent['transaction_id'],
+            'metadata' => [
+                'checkout_session_id' => $session->id,
+                'cart_id' => $session->cart_id,
+                'client_secret' => $gatewayIntent['client_secret'] ?? null
+            ],
+        ]);
+
+        return [
+            'success' => true,
+            'client_secret' => $gatewayIntent['client_secret'] ?? null,
+            'transaction_id' => $intent->id, // Our ID or Gateway ID? Gateway ID usually needed by frontend if not secret
+            'gateway_id' => $gatewayIntent['transaction_id']
+        ];
+    }
+
+    private function executeCharge(\App\Models\PaymentIntent $intent, string $source, string $description): array
+    {
         try {
-            // Update to Processing
+            // Updated to Processing
             $intent->status = \App\Enums\PaymentIntentState::PROCESSING;
             $intent->save();
 
-            $response = $this->gateway->charge(
-                $order->total,
-                $order->currency ?? 'USD',
+            $gateway = $this->resolveGateway($intent->payment_method);
+
+            $response = $gateway->charge(
+                $intent->amount,
+                $intent->currency,
                 $source,
                 [
-                    'description' => "Order #{$order->order_number}",
-                    'metadata' => [
-                        'order_id' => $order->id,
+                    'description' => $description,
+                    'metadata' => array_merge($intent->metadata ?? [], [
                         'payment_intent_id' => $intent->id,
-                    ],
+                    ]),
                 ]
             );
 
@@ -74,7 +157,7 @@ class PaymentService
                 $intent->metadata = array_merge($intent->metadata ?? [], ['error_message' => $response['message'] ?? 'Unknown']);
                 $intent->save();
 
-                Log::error("Payment failed for Order #{$order->order_number}: " . ($response['message'] ?? 'Unknown error'));
+                Log::error("Payment failed: " . ($response['message'] ?? 'Unknown error'));
                 return ['success' => false, 'message' => $response['message'] ?? 'Payment failed'];
             }
         } catch (\Exception $e) {

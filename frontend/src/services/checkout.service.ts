@@ -21,11 +21,15 @@ export const checkoutService = {
     /**
      * Initiate payment for the current session
      */
-    initiatePayment: async (sessionId: string, method: string): Promise<{ redirect_url: string; order_id?: number }> => {
-        const response = await api.post<ApiResponse<{ redirect_url: string; order_id?: number }>>('/payment/initiate', {
-            checkout_session_id: sessionId,
+    initiatePayment: async (sessionId: string, method: string, source?: string, extraData?: Record<string, string>): Promise<{ redirect_url?: string; order_id?: number; client_secret?: string; transaction_id?: string }> => {
+        const payload: any = {
+            checkout_id: sessionId,
             payment_method: method
-        });
+        };
+        if (source) payload.source = source;
+        if (extraData) Object.assign(payload, extraData);
+
+        const response = await api.post<ApiResponse<{ redirect_url?: string; order_id?: number; client_secret?: string; transaction_id?: string }>>('/payment/initiate', payload);
         return response.data.data;
     }
 };

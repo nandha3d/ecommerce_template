@@ -130,6 +130,9 @@ Route::prefix('v1')->group(function () {
     // Order Routes (Authenticated)
     // ============================================
     Route::middleware('auth:api')->prefix('orders')->group(function () {
+        // Validation Endpoint (Phase 1)
+        Route::post('/validate', [OrderController::class, 'validateOrder']);
+        
         Route::get('/', [OrderController::class, 'index']);
         // Rate limited order creation (3/min) to prevent abuse
         Route::post('/', [OrderController::class, 'store'])->middleware('rate.limit:order');

@@ -85,27 +85,74 @@ class PaymentController extends Controller
     /**
      * Initiate a payment
      */
+    /**
+     * Initiate a payment (Strict Flow: CheckoutSession / Legacy: Order)
+     */
+    /**
+     * Initiate a payment (Strict Flow: CheckoutSession / Legacy: Order)
+     */
     public function initiate(Request $request)
     {
         $request->validate([
-            'order_id' => 'required|exists:orders,id',
-            'source' => 'required|string',
-            'method' => 'string'
+            'checkout_id' => 'required_without:order_id|exists:checkout_sessions,id',
+            'order_id' => 'required_without:checkout_id|exists:orders,id',
+            'source' => 'nullable|string', // Optional for Payment Element (Intent Creation)
+            'method' => 'string',
+            'razorpay_order_id' => 'nullable|string',
+            'razorpay_signature' => 'nullable|string'
         ]);
 
         try {
-            $order = \App\Models\Order::find($request->order_id);
-            // Check ownership
-            if ($order->user_id !== auth()->id()) {
-                return response()->json(['error' => 'Unauthorized'], 403);
-            }
+            if ($request->checkout_id) {
+                // STRICT FLOW: Pay against immutable CheckoutSession
+                $session = \App\Models\CheckoutSession::findOrFail($request->checkout_id);
+                
+                // Verify ownership
+                if ($session->user_id !== auth()->id()) {
+                     return response()->json(['error' => 'Unauthorized'], 403);
+                }
+                
+                if ($session->expires_at && $session->expires_at->isPast()) {
+                     return response()->json(['error' => 'Checkout session expired'], 400);
+                }
 
-            $result = $this->paymentService->processPayment($order, $request->source, $request->method ?? 'card');
+                if (empty($request->source)) {
+                    // MODE 1: Create Intent (Payment Element Flow)
+                    $result = $this->paymentService->createCheckoutIntent($session, $request->method ?? 'card');
+                } else {
+                    // MODE 2: Capture/Confirm (Token Flow)
+                    $options = [];
+                    if ($request->has('razorpay_signature')) {
+                        $options['razorpay_signature'] = $request->razorpay_signature;
+                        $options['razorpay_order_id'] = $request->razorpay_order_id;
+                    }
+                    
+                    $result = $this->paymentService->processCheckoutPayment($session, $request->source, $request->method ?? 'card', $options);
+                }
+                
+            } else {
+                // LEGACY / REPAYMENT FLOW
+                $order = \App\Models\Order::findOrFail($request->order_id);
+                // Check ownership
+                if ($order->user_id !== auth()->id()) {
+                    return response()->json(['error' => 'Unauthorized'], 403);
+                }
+
+                // Legacy flow currently requires source, but if we wanted to support Intent creation for orders, we could here.
+                // For now, enforce source for legacy orders or throw error if missing.
+                if (empty($request->source)) {
+                    // TODO: Implement createOrderIntent if needed.
+                     return response()->json(['error' => 'Source required for legacy order payment'], 400);
+                }
+
+                $result = $this->paymentService->processPayment($order, $request->source, $request->method ?? 'card');
+            }
 
             if ($result['success']) {
                 return response()->json([
                     'success' => true,
-                    'transaction_id' => $result['transaction_id']
+                    'transaction_id' => $result['transaction_id'],
+                    'client_secret' => $result['client_secret'] ?? null, // Return secret if created
                 ]);
             } else {
                 return response()->json([

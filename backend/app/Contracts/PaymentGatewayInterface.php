@@ -13,6 +13,25 @@ interface PaymentGatewayInterface
      * @param array $options Additional options (metadata, description, etc.)
      * @return array Response data
      */
+    /**
+     * Create a payment intent (without confirming immediately)
+     *
+     * @param float $amount Amount to charge
+     * @param string $currency Currency code
+     * @param array $options Additional options
+     * @return array Response data (including client_secret)
+     */
+    public function createIntent(float $amount, string $currency, array $options = []): array;
+
+    /**
+     * Charge a payment source
+     *
+     * @param float $amount Amount to charge
+     * @param string $currency Currency code (e.g., 'USD', 'INR')
+     * @param string $source Payment source token (or Method ID)
+     * @param array $options Additional options (metadata, description, etc.)
+     * @return array Response data
+     */
     public function charge(float $amount, string $currency, string $source, array $options = []): array;
 
     /**

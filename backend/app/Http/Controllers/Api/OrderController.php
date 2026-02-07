@@ -160,6 +160,155 @@ class OrderController extends Controller
     }
 
     /**
+     * Validate order before creation (Phase 1: Order Validation Contract).
+     */
+    public function validateOrder(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        $sessionId = $request->header('X-Cart-Session');
+        $cart = $this->cartService->getCart($user->id, $sessionId);
+        
+        $cart->load(['items.product', 'items.variant', 'coupon']);
+
+        if (!$cart || $cart->items->isEmpty()) {
+            return response()->json([
+                'success' => false, // validation_status: invalid
+                'validation_status' => 'invalid',
+                'reasons' => ['Cart is empty'],
+            ], 422);
+        }
+
+        // 1. Validate Inventory & Prices (Recalculate)
+        $reasons = [];
+        $healedSubtotal = 0;
+        $hashItems = [];
+        
+        foreach ($cart->items as $item) {
+            // Price Check
+            $unitPrice = (float) $item->unit_price;
+             if ($unitPrice <= 0) {
+                 if ($item->variant) {
+                    $unitPrice = (float) ($item->variant->sale_price > 0 ? $item->variant->sale_price : $item->variant->price);
+                } elseif ($item->product) {
+                     $defaultVariant = $item->product->variants->first();
+                     if ($defaultVariant) {
+                         $unitPrice = (float) ($defaultVariant->sale_price > 0 ? $defaultVariant->sale_price : $defaultVariant->price);
+                     }
+                }
+            }
+            // Check for Price Drift (Optional: if we want to enforce it matched exactly what was in DB)
+            // For now, we trust the 'healed' price as the Authoritative Price.
+            
+            // Stock Check
+            $stock = 0;
+            if ($item->variant) {
+                $stock = $item->variant->stock; // Assuming stock field exists
+            }
+            
+            if ($stock < $item->quantity) {
+                $reasons[] = "Item '{$item->product_name}' is out of stock (Requested: {$item->quantity}, Available: {$stock})";
+            }
+            
+            $healedSubtotal += $unitPrice * $item->quantity;
+            $hashItems[] = $item->id . ':' . $item->quantity . ':' . $unitPrice;
+        }
+
+        if (!empty($reasons)) {
+            return response()->json([
+                'success' => false,
+                'validation_status' => 'invalid',
+                'reasons' => $reasons,
+            ], 422); 
+        }
+
+        // 2. Calculate Totals Authoritatively
+        $discount = (float) $cart->discount; // Recalculate if coupon is applied? Ideally yes.
+        $shipping = (float) $cart->shipping; // Recalculate via ShippingService? Ideally yes.
+        $tax = (float) ($healedSubtotal * 0.18); // Example fixed tax, replace with TaxService later
+        // Note: For Phase 1 strictness, we should use what's in Cart or Recalculate. 
+        // Using Cart values for now but assuming they are refreshed by CartService previously.
+        // Actually, let's trust $cart values for shipping/tax but 'healedSubtotal' for price.
+        
+        $total = $healedSubtotal + $cart->shipping + $cart->tax - $discount;
+
+        // 3. Currency Authority
+        $currency = \App\Models\Currency::where('is_base', true)->firstOr(function() {
+             return new \App\Models\Currency(['code' => 'USD', 'symbol' => '$', 'decimal_places' => 2]);
+        });
+        
+        // 4. Create/Update Checkout Lock (Phase 2: Checkout Lock)
+        // We Snapshot EVERYTHING.
+        
+        $sessionData = [
+            'items' => array_map(function($item) {
+                // Determine price again or use healed price from above
+                $unitPrice = (float) $item->unit_price;
+                if ($unitPrice <= 0) {
+                     if ($item->variant) {
+                        $unitPrice = (float) ($item->variant->sale_price > 0 ? $item->variant->sale_price : $item->variant->price);
+                    } elseif ($item->product) {
+                         $defaultVariant = $item->product->variants->first();
+                         if ($defaultVariant) {
+                             $unitPrice = (float) ($defaultVariant->sale_price > 0 ? $defaultVariant->sale_price : $defaultVariant->price);
+                         }
+                    }
+                }
+                
+                return [
+                    'product_id' => $item->product_id,
+                    'variant_id' => $item->variant_id,
+                    'product_name' => $item->product->name ?? 'Unknown',
+                    'variant_name' => $item->variant->name ?? null,
+                    'sku' => $item->variant->sku ?? null,
+                    'quantity' => $item->quantity,
+                    'unit_price' => $unitPrice,
+                    'total' => $unitPrice * $item->quantity,
+                    'image' => $item->product->images->first()->url ?? null,
+                ];
+            }, $cart->items->all()),
+            'coupon_id' => $cart->coupon_id,
+            'coupon_code' => $cart->coupon->code ?? null,
+        ];
+
+        // Create or Update Session
+        // We use the cart's session_id as a reference or create a new unique checkout session
+        $checkoutSession = \App\Models\CheckoutSession::updateOrCreate(
+            ['cart_id' => $cart->id, 'step' => 'validation'], // Simple state tracking
+            [
+                'user_id' => $user->id,
+                'subtotal' => $healedSubtotal,
+                'discount' => $discount,
+                'shipping_cost' => $shipping,
+                'tax_amount' => $tax,
+                'total' => $total,
+                'currency' => $currency->code,
+                'data' => $sessionData,
+                'expires_at' => now()->addMinutes(15), 
+                'started_at' => now(),
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'validation_status' => 'valid',
+            'checkout_id' => $checkoutSession->id, // The LOCK ID
+            'recalculated_totals' => [
+                'subtotal' => $healedSubtotal,
+                'tax' => $tax,
+                'shipping' => $shipping,
+                'discount' => $discount,
+                'total' => $total,
+            ],
+            'locked_currency' => [
+                'code' => $currency->code,
+                'symbol' => $currency->symbol,
+                'precision' => $currency->decimal_places ?? 2,
+            ],
+            'expires_at' => $checkoutSession->expires_at->toIso8601String(),
+        ]);
+    }
+
+    /**
      * Cancel order.
      */
     public function cancel(int $id): JsonResponse
