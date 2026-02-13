@@ -4,28 +4,34 @@ namespace App\Services\Payment;
 
 use App\Contracts\PaymentGatewayInterface;
 use App\Services\ConfigurationService;
-use Stripe\StripeClient;
-use Stripe\Webhook as StripeWebhook;
-use Stripe\Stripe;
+use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 
 class StripePaymentGateway implements PaymentGatewayInterface
 {
-    private $stripe;
+    private ?Client $client = null;
+    private ?string $apiKey = null;
+    private string $baseUrl = 'https://api.stripe.com/v1/';
 
     public function __construct(ConfigurationService $config)
     {
-        $apiKey = $config->get('payment.stripe.secret_key');
-        if (empty($apiKey)) {
-            // Log warning or throw exception if critical
-            Log::warning('Stripe secret key not configured.');
+        $this->apiKey = config('services.stripe.secret') ?? $config->get('payment.stripe.secret_key');
+        if (empty($this->apiKey)) {
+            if (config('app.env') === 'production') {
+                throw new \RuntimeException('Stripe secret key is not configured. Set STRIPE_SECRET in .env');
+            }
+            Log::warning('Stripe secret key not configured — payment processing will fail.');
         }
 
-        if (class_exists(StripeClient::class)) {
-            $this->stripe = new StripeClient($apiKey ?? 'sk_test_placeholder');
-        } else {
-            Log::error('StripeClient class not found. Install stripe/stripe-php.');
-        }
+        $this->client = new Client([
+            'base_uri' => $this->baseUrl,
+            'headers' => [
+                'Authorization' => 'Bearer ' . ($this->apiKey ?? ''),
+                'Content-Type' => 'application/x-www-form-urlencoded',
+                'Stripe-Version' => '2023-10-16',
+            ],
+            'verify' => config('app.env') === 'production',
+        ]);
     }
 
     public function createIntent(float $amount, string $currency, array $options = []): array
@@ -33,20 +39,24 @@ class StripePaymentGateway implements PaymentGatewayInterface
         try {
             $amountInSmallestUnit = $this->getAmountInSmallestUnit($amount, $currency);
 
-            $paymentIntent = $this->stripe->paymentIntents->create([
-                'amount' => $amountInSmallestUnit,
-                'currency' => strtolower($currency),
-                'automatic_payment_methods' => ['enabled' => true],
-                'description' => $options['description'] ?? 'Order Payment',
-                'metadata' => $options['metadata'] ?? [],
+            $response = $this->client->post('payment_intents', [
+                'form_params' => [
+                    'amount' => $amountInSmallestUnit,
+                    'currency' => strtolower($currency),
+                    'automatic_payment_methods' => ['enabled' => 'true'],
+                    'description' => $options['description'] ?? 'Order Payment',
+                    'metadata' => $options['metadata'] ?? [],
+                ]
             ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
 
             return [
                 'success' => true,
-                'client_secret' => $paymentIntent->client_secret,
-                'transaction_id' => $paymentIntent->id,
-                'status' => $paymentIntent->status,
-                'data' => $paymentIntent->toArray(),
+                'client_secret' => $data['client_secret'],
+                'transaction_id' => $data['id'],
+                'status' => $data['status'],
+                'data' => $data,
             ];
 
         } catch (\Exception $e) {
@@ -54,40 +64,36 @@ class StripePaymentGateway implements PaymentGatewayInterface
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => $e->getCode(),
             ];
         }
     }
+
     public function charge(float $amount, string $currency, string $source, array $options = []): array
     {
         try {
-            // Convert amount to smallest currency unit (cents/paise)
             $amountInSmallestUnit = $this->getAmountInSmallestUnit($amount, $currency);
 
-            $chargeParams = [
+            $params = [
                 'amount' => $amountInSmallestUnit,
                 'currency' => strtolower($currency),
-                'source' => $source,
+                'payment_method' => $source,
+                'confirm' => 'true',
+                'return_url' => $options['return_url'] ?? route('checkout.success'),
                 'description' => $options['description'] ?? 'Order Payment',
                 'metadata' => $options['metadata'] ?? [],
             ];
 
-            // If strictly using PaymentIntents (recommended for SCA)
-            $paymentIntent = $this->stripe->paymentIntents->create([
-                'amount' => $amountInSmallestUnit,
-                'currency' => strtolower($currency),
-                'payment_method' => $source,
-                'confirm' => true,
-                'return_url' => $options['return_url'] ?? route('checkout.success'),
-                'description' => $options['description'] ?? 'Order Payment',
-                'metadata' => $options['metadata'] ?? [],
+            $response = $this->client->post('payment_intents', [
+                'form_params' => $params
             ]);
 
+            $data = json_decode($response->getBody()->getContents(), true);
+
             return [
-                'success' => $paymentIntent->status === 'succeeded',
-                'transaction_id' => $paymentIntent->id,
-                'status' => $paymentIntent->status,
-                'data' => $paymentIntent->toArray(),
+                'success' => $data['status'] === 'succeeded',
+                'transaction_id' => $data['id'],
+                'status' => $data['status'],
+                'data' => $data,
             ];
 
         } catch (\Exception $e) {
@@ -95,7 +101,6 @@ class StripePaymentGateway implements PaymentGatewayInterface
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => $e->getCode(),
             ];
         }
     }
@@ -105,22 +110,20 @@ class StripePaymentGateway implements PaymentGatewayInterface
         try {
             $params = ['payment_intent' => $transactionId];
             if ($amount !== null) {
-                // Refunds might need currency check for decimal conversion too, usually assumed same as original
-                // For simplicity here assume full refund or provide amount in smallest unit if needed. 
-                // Stripe expects amount in cents.
-                // NOTE: We'd need original currency to convert $amount correctly. 
-                // For now, assuming full refund if amount is not passed.
-                // If amount is passed, we might need to store currency with transaction or pass it here.
                 $params['amount'] = (int) ($amount * 100);
             }
 
-            $refund = $this->stripe->refunds->create($params);
+            $response = $this->client->post('refunds', [
+                'form_params' => $params
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
 
             return [
-                'success' => $refund->status === 'succeeded' || $refund->status === 'pending',
-                'transaction_id' => $refund->id,
-                'status' => $refund->status,
-                'data' => $refund->toArray(),
+                'success' => in_array($data['status'], ['succeeded', 'pending']),
+                'transaction_id' => $data['id'],
+                'status' => $data['status'],
+                'data' => $data,
             ];
         } catch (\Exception $e) {
             Log::error('Stripe Refund Failed: ' . $e->getMessage());
@@ -134,11 +137,13 @@ class StripePaymentGateway implements PaymentGatewayInterface
     public function verify(string $paymentId): array
     {
         try {
-            $intent = $this->stripe->paymentIntents->retrieve($paymentId);
+            $response = $this->client->get('payment_intents/' . $paymentId);
+            $data = json_decode($response->getBody()->getContents(), true);
+
             return [
-                'success' => $intent->status === 'succeeded',
-                'status' => $intent->status,
-                'data' => $intent->toArray(),
+                'success' => $data['status'] === 'succeeded',
+                'status' => $data['status'],
+                'data' => $data,
             ];
         } catch (\Exception $e) {
             Log::error('Stripe Verify Failed: ' . $e->getMessage());
@@ -150,17 +155,45 @@ class StripePaymentGateway implements PaymentGatewayInterface
     }
 
     /**
-     * Verify Stripe Webhook Signature
+     * Verify Stripe Webhook Signature (Manual implementation)
+     */
+    /**
+     * Verify Stripe Webhook Signature with replay attack protection.
+     * Validates HMAC-SHA256 and enforces a 5-minute timestamp tolerance.
      */
     public function verifyWebhookSignature(string $payload, string $signature, string $secret): bool
     {
-        try {
-            StripeWebhook::constructEvent($payload, $signature, $secret);
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Stripe Webhook Signature Verification Failed: ' . $e->getMessage());
+        $parts = explode(',', $signature);
+        $timestamp = null;
+        $v1Signature = null;
+
+        foreach ($parts as $part) {
+            if (strpos($part, 't=') === 0) {
+                $timestamp = substr($part, 2);
+            } elseif (strpos($part, 'v1=') === 0) {
+                $v1Signature = substr($part, 3);
+            }
+        }
+
+        if (!$timestamp || !$v1Signature) {
+            Log::warning('Stripe webhook: missing timestamp or signature component.');
             return false;
         }
+
+        // Replay attack protection: reject webhooks older than 5 minutes
+        $tolerance = 300; // 5 minutes in seconds
+        if (abs(time() - (int) $timestamp) > $tolerance) {
+            Log::warning('Stripe webhook: timestamp outside tolerance window.', [
+                'webhook_time' => $timestamp,
+                'server_time' => time(),
+            ]);
+            return false;
+        }
+
+        $signedPayload = $timestamp . '.' . $payload;
+        $expectedSignature = hash_hmac('sha256', $signedPayload, $secret);
+
+        return hash_equals($expectedSignature, $v1Signature);
     }
 
     private function getAmountInSmallestUnit(float $amount, string $currency): int

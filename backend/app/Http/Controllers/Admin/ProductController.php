@@ -52,17 +52,11 @@ class ProductController extends Controller
     /**
      * Get single product for editing.
      */
-    public function show(int $id): JsonResponse
+    public function show(Product $product): JsonResponse
     {
-        $product = $this->productRepository->find($id);
-
-        if (!$product) {
-            return response()->json(['success' => false, 'message' => 'Product not found'], 404);
-        }
-
         return response()->json([
             'success' => true,
-            'data' => $product,
+            'data' => $product->load(['brand', 'categories', 'images', 'variants', 'addonGroups.options']),
         ]);
     }
 
@@ -91,17 +85,22 @@ class ProductController extends Controller
     /**
      * Update product.
      */
-    public function update(UpdateProductRequest $request, int $id): JsonResponse
+    public function update(UpdateProductRequest $request, Product $product): JsonResponse
     {
         try {
-            $product = $this->productService->updateProduct($id, $request->validated());
+            \Log::info("Attempting to update product ID: {$product->id}", ['data' => $request->validated()]);
+            $updatedProduct = $this->productService->updateProduct($product, $request->validated());
 
             return response()->json([
                 'success' => true,
                 'message' => 'Product updated successfully',
-                'data' => $product,
+                'data' => $updatedProduct,
             ]);
         } catch (\Exception $e) {
+            \Log::error("Product update failed for ID: {$product->id}", [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update product',
@@ -113,14 +112,8 @@ class ProductController extends Controller
     /**
      * Delete product.
      */
-    public function destroy(int $id): JsonResponse
+    public function destroy(Product $product): JsonResponse
     {
-        $product = $this->productRepository->find($id);
-        
-        if (!$product) {
-            return response()->json(['success' => false, 'message' => 'Product not found'], 404);
-        }
-
         $this->productRepository->delete($product);
 
         return response()->json([

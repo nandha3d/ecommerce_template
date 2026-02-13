@@ -63,10 +63,8 @@ Route::prefix('v1')->group(function () {
     });
 
 
-    // ============================================
-    // Authentication Routes
-    // ============================================
-    Route::prefix('auth')->group(function () {
+    // Authentication Routes - Strict Rate Limiting (5 per minute)
+    Route::middleware(['throttle:auth'])->prefix('auth')->group(function () {
         Route::post('/register', [AuthController::class, 'register']);
         Route::post('/login', [AuthController::class, 'login']);
         Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
@@ -81,10 +79,8 @@ Route::prefix('v1')->group(function () {
         });
     });
 
-    // ============================================
-    // Product Routes (Public)
-    // ============================================
-    Route::prefix('products')->group(function () {
+    // Product Routes (Public) - Lenient Rate Limiting (120 per minute)
+    Route::middleware(['throttle:public'])->prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index']);
         Route::get('/featured', [ProductController::class, 'featured']);
         Route::get('/best-sellers', [ProductController::class, 'bestSellers']);
@@ -99,6 +95,7 @@ Route::prefix('v1')->group(function () {
     // System Config Route (Public)
     // ============================================
     Route::get('/system/config', [SystemController::class, 'getConfig']);
+    Route::get('/configuration/variant-builder', [SystemController::class, 'getVariantBuilderConfig']);
 
     // ============================================
     // Cart Routes (Guest + Authenticated)
@@ -126,16 +123,13 @@ Route::prefix('v1')->group(function () {
             ->middleware('rate.limit:coupon');
     });
 
-    // ============================================
-    // Order Routes (Authenticated)
-    // ============================================
-    Route::middleware('auth:api')->prefix('orders')->group(function () {
+    // Order Routes (Authenticated) - Medium Rate Limiting (10 per minute)
+    Route::middleware(['auth:api', 'throttle:checkout'])->prefix('orders')->group(function () {
         // Validation Endpoint (Phase 1)
         Route::post('/validate', [OrderController::class, 'validateOrder']);
         
         Route::get('/', [OrderController::class, 'index']);
-        // Rate limited order creation (3/min) to prevent abuse
-        Route::post('/', [OrderController::class, 'store'])->middleware('rate.limit:order');
+        Route::post('/', [OrderController::class, 'store']);
         Route::get('/{id}', [OrderController::class, 'show']);
         Route::get('/number/{orderNumber}', [OrderController::class, 'showByNumber']);
         Route::post('/{id}/cancel', [OrderController::class, 'cancel']);
@@ -190,18 +184,42 @@ Route::prefix('v1')->group(function () {
         // Timezones
         Route::get('/timezones', [App\Http\Controllers\Api\TimezoneController::class, 'index']);
         Route::post('/timezone/switch', [App\Http\Controllers\Api\TimezoneController::class, 'switch']);
+
+        // Locations
+        Route::get('/locations/countries', [App\Http\Controllers\Api\LocationController::class, 'getCountries']);
+        Route::get('/locations/states/{countryCode}', [App\Http\Controllers\Api\LocationController::class, 'getStates']);
     });
 
     // ============================================
     // Admin Routes
     // ============================================
-    // TODO: Wrap in Admin Middleware if not already global for this section, 
-    // but here we just grouped under v1. Usually Admin is `Route::middleware(['auth:api', 'admin'])`
-    // For now we add the definitions.
-    
-    Route::prefix('admin')->group(function () {
-         
-        // Globalization Admin
+    // ============================================
+    // Admin Routes (Authenticated + Admin Role)
+    // ============================================
+    Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
+        // Products Management
+        Route::apiResource('products', \App\Http\Controllers\Api\Admin\ProductController::class);
+
+        // Coupons Management
+        Route::apiResource('coupons', \App\Http\Controllers\Api\Admin\CouponController::class);
+
+        // Refund Management
+        Route::get('/refunds', [\App\Http\Controllers\Api\Admin\RefundController::class, 'index']);
+        Route::post('/refunds/{id}/approve', [\App\Http\Controllers\Api\Admin\RefundController::class, 'approve']);
+        Route::post('/refunds/{id}/reject', [\App\Http\Controllers\Api\Admin\RefundController::class, 'reject']);
+
+        // Review Management
+        Route::get('/reviews', [\App\Http\Controllers\Api\Admin\ReviewAdminController::class, 'index']);
+        Route::post('/reviews/{id}/approve', [\App\Http\Controllers\Api\Admin\ReviewAdminController::class, 'approve']);
+        Route::post('/reviews/{id}/reject', [\App\Http\Controllers\Api\Admin\ReviewAdminController::class, 'reject']);
+        Route::delete('/reviews/{id}', [\App\Http\Controllers\Api\Admin\ReviewAdminController::class, 'destroy']);
+
+        // System Settings
+        Route::get('/settings/system', [\App\Http\Controllers\Api\Admin\SystemSettingController::class, 'index']);
+        Route::post('/settings/system', [\App\Http\Controllers\Api\Admin\SystemSettingController::class, 'update']);
+        Route::apiResource('settings/taxes', \App\Http\Controllers\Api\Admin\TaxAdminController::class);
+
+        // Globalization Admin — Currencies
         Route::prefix('currencies')->group(function () {
             Route::get('/', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'index']);
             Route::post('/', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'store']);
@@ -211,6 +229,7 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{id}', [App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'destroy']);
         });
 
+        // Globalization Admin — Timezones
         Route::prefix('timezones')->group(function () {
             Route::get('/', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'index']);
             Route::get('/identifiers', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'validIdentifiers']);
@@ -221,46 +240,10 @@ Route::prefix('v1')->group(function () {
             Route::delete('/{id}', [App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'destroy']);
         });
 
+        // Settings — Read-only for admin settings page
+        Route::get('settings/currencies', [\App\Http\Controllers\Api\Admin\CurrencyAdminController::class, 'index']);
+        Route::get('settings/timezones', [\App\Http\Controllers\Api\Admin\TimezoneAdminController::class, 'index']);
     });
-
-    // ============================================
-    // Admin Routes - Legacy Placeholder or other admin routes
-
-    // ============================================
-    // Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
-    //     // Dashboard
-    //     Route::get('/dashboard/stats', 'Admin\DashboardController@stats');
-    //     Route::get('/dashboard/recent-orders', 'Admin\DashboardController@recentOrders');
-    //     Route::get('/dashboard/top-products', 'Admin\DashboardController@topProducts');
-
-    //     // Products Management
-    //     Route::apiResource('products', 'Admin\ProductController');
-    //     Route::post('/products/{id}/images', 'Admin\ProductController@uploadImages');
-    //     Route::delete('/products/{id}/images/{imageId}', 'Admin\ProductController@deleteImage');
-
-    //     // Categories Management
-    //     Route::apiResource('categories', 'Admin\CategoryController');
-
-    //     // Brands Management
-    //     Route::apiResource('brands', 'Admin\BrandController');
-
-    //     // Orders Management
-    //     Route::get('/orders', 'Admin\OrderController@index');
-    //     Route::get('/orders/{id}', 'Admin\OrderController@show');
-    //     Route::put('/orders/{id}/status', 'Admin\OrderController@updateStatus');
-
-    //     // Customers Management
-    //     Route::get('/customers', 'Admin\CustomerController@index');
-    //     Route::get('/customers/{id}', 'Admin\CustomerController@show');
-
-    //     // Coupons Management
-    //     Route::apiResource('coupons', 'Admin\CouponController');
-
-    //     // Reviews Management
-    //     Route::get('/reviews', 'Admin\ReviewController@index');
-    //     Route::put('/reviews/{id}/approve', 'Admin\ReviewController@approve');
-    //     Route::delete('/reviews/{id}', 'Admin\ReviewController@destroy');
-    // });
 
     // ============================================
     // Module System Routes
@@ -288,8 +271,26 @@ Route::prefix('v1')->group(function () {
         Route::post('/products/{productId}/variants', [ProductVariantController::class, 'store']);
         Route::put('/variants/{id}', [ProductVariantController::class, 'update']);
         Route::delete('/variants/{id}', [ProductVariantController::class, 'destroy']);
+        Route::post('/variants/{id}/duplicate', [ProductVariantController::class, 'duplicate']);
+        
+        // Bulk Operations
         Route::post('/variants/bulk-stock', [ProductVariantController::class, 'bulkUpdateStock']);
+        Route::post('/variants/bulk-price', [ProductVariantController::class, 'bulkUpdatePrice']);
+        Route::post('/variants/bulk-cost', [ProductVariantController::class, 'bulkUpdateCost']);
+        Route::post('/variants/bulk-delete', [ProductVariantController::class, 'bulkDelete']);
+        Route::post('/variants/bulk-duplicate', [ProductVariantController::class, 'bulkDuplicate']);
+        
+        // Import/Export
+        Route::post('/variants/import', [\App\Http\Controllers\Api\VariantImportExportController::class, 'import']);
+        Route::get('/variants/export', [\App\Http\Controllers\Api\VariantImportExportController::class, 'export']);
+        
+        // Advanced Management
+        Route::get('/variants/low-stock', [ProductVariantController::class, 'lowStock']);
+        Route::get('/products/{productId}/cost-analysis', [ProductVariantController::class, 'costAnalysis']);
+
+        // Matrix Generation
         Route::post('/variants/generate-matrix', [ProductVariantController::class, 'generateMatrix']);
+        Route::post('/products/{productId}/variants/persist-matrix', [ProductVariantController::class, 'persistMatrix']);
     });
 
     // ============================================
@@ -332,20 +333,19 @@ Route::prefix('v1')->group(function () {
         Route::delete('/{id}', [PriceOfferController::class, 'destroy']);
     });
 
-    // ============================================
-    // Payment Gateway Routes
-    // ============================================
-    Route::get('/payment/gateways', [PaymentController::class, 'gateways']);
-    
-    // Payment routes with rate limiting and fraud protection
-    Route::middleware(['payment.rate_limit'])->group(function () {
-        Route::post('/payment/initiate', [PaymentController::class, 'initiate']);
+    // Payment Gateway Routes - Medium Rate Limiting (10 per minute)
+    Route::middleware(['throttle:checkout'])->group(function () {
+        Route::get('/payment/gateways', [PaymentController::class, 'gateways']);
+        
+        // Payment routes with rate limiting and fraud protection
+        Route::middleware(['payment.rate_limit'])->group(function () {
+            Route::post('/payment/initiate', [PaymentController::class, 'initiate']);
+        });
+        
+        Route::post('/payment/verify', [PaymentController::class, 'verify']);
+        Route::post('/payment/failed', [PaymentController::class, 'failed']);
+        Route::post('/payment/webhook', [PaymentController::class, 'handleWebhook']);
     });
-    
-    Route::post('/payment/verify', [PaymentController::class, 'verify']);
-    Route::post('/payment/verify', [PaymentController::class, 'verify']);
-    Route::post('/payment/failed', [PaymentController::class, 'failed']);
-    Route::post('/payment/webhook', [PaymentController::class, 'handleWebhook']);
     
     Route::middleware(['auth:api', 'admin'])->prefix('admin/payment')->group(function () {
         Route::get('/gateways', [PaymentController::class, 'index']);
@@ -374,12 +374,11 @@ Route::prefix('v1')->group(function () {
     // Admin Product Management Routes
     // ============================================
     Route::middleware(['auth:api', 'admin'])->prefix('admin')->group(function () {
-        // Products CRUD
         Route::get('/products', [\App\Http\Controllers\Admin\ProductController::class, 'index']);
         Route::post('/products', [\App\Http\Controllers\Admin\ProductController::class, 'store']);
-        Route::get('/products/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'show']);
-        Route::put('/products/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'update']);
-        Route::delete('/products/{id}', [\App\Http\Controllers\Admin\ProductController::class, 'destroy']);
+        Route::get('/products/{product}', [\App\Http\Controllers\Admin\ProductController::class, 'show']);
+        Route::put('/products/{product}', [\App\Http\Controllers\Admin\ProductController::class, 'update']);
+        Route::delete('/products/{product}', [\App\Http\Controllers\Admin\ProductController::class, 'destroy']);
         Route::post('/products/bulk', [\App\Http\Controllers\Admin\ProductController::class, 'bulk']);
 
         // Image Upload
@@ -389,6 +388,19 @@ Route::prefix('v1')->group(function () {
 
         // Categories
         Route::apiResource('categories', \App\Http\Controllers\Admin\CategoryController::class);
+
+        // User Management
+        Route::prefix('users')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\UserController::class, 'index']);
+            Route::post('/', [\App\Http\Controllers\Admin\UserController::class, 'store']);
+            Route::get('/{id}', [\App\Http\Controllers\Admin\UserController::class, 'show']);
+            Route::put('/{id}', [\App\Http\Controllers\Admin\UserController::class, 'update']);
+            Route::delete('/{id}', [\App\Http\Controllers\Admin\UserController::class, 'destroy']);
+            Route::post('/{id}/toggle-status', [\App\Http\Controllers\Admin\UserController::class, 'toggleStatus']);
+            Route::post('/{id}/role', [\App\Http\Controllers\Admin\UserController::class, 'changeRole']);
+            Route::post('/{id}/reset-password', [\App\Http\Controllers\Admin\UserController::class, 'resetPassword']);
+            Route::get('/{id}/activity', [\App\Http\Controllers\Admin\UserController::class, 'activityLogs']);
+        });
 
         // Brands
         Route::get('/brands', function () {
@@ -410,6 +422,9 @@ Route::prefix('v1')->group(function () {
         // Analytics Routes
         // ============================================
         Route::get('/analytics/dashboard', [\App\Http\Controllers\Api\Admin\AnalyticsController::class, 'dashboard']);
+        Route::get('/analytics/variant-performance', [\App\Http\Controllers\Api\Admin\AnalyticsController::class, 'variantPerformance']);
+        Route::get('/analytics/attribute-analysis', [\App\Http\Controllers\Api\Admin\AnalyticsController::class, 'attributeAnalysis']);
+
 
         // ============================================
         // Fraud Detection Routes
@@ -433,6 +448,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/reset', [\App\Http\Controllers\Api\Admin\ThemeSettingsController::class, 'reset']);
         });
     });
+    // ============================================
+    // Search Routes
+    // ============================================
+    Route::get('/search', [App\Http\Controllers\Api\SearchController::class, 'search']);
+    Route::get('/search/suggestions', [App\Http\Controllers\Api\SearchController::class, 'suggestions']);
+
 });
 
 

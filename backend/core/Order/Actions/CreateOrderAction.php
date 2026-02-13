@@ -72,12 +72,49 @@ class CreateOrderAction
             'shipping' => $session->shipping_cost,
             'tax' => $session->tax_amount,
             'total' => $session->total, 
-            'currency' => $session->currency ?? 'JPY', // Hardcode default if missing, or USD
+            'currency' => $session->currency ?? 'INR',
             'coupon_id' => $session->data['coupon_id'] ?? null,
             'notes' => $data['notes'] ?? null,
             'idempotency_key' => $data['idempotency_key'] ?? null,
-            // 'checkout_session_id' => $session->id, // Ideally link back
         ]);
+
+        // Create IMMUTABLE Price Snapshot
+        $snapshot = \App\Models\PriceSnapshot::create([
+            'order_id' => $order->id,
+            'subtotal' => $session->subtotal,
+            'currency' => $session->currency ?? 'INR',
+            'discount_breakdown' => $session->data['discounts'] ?? [],
+            'total_discount' => $session->discount,
+            'tax_breakdown' => $session->data['taxes'] ?? [],
+            'total_tax' => $session->tax_amount,
+            'shipping_cost' => $session->shipping_cost,
+            'final_amount' => $session->total,
+            'calculation_version' => '1.0',
+            'calculation_metadata' => [
+                'checkout_session_id' => $session->id,
+                'user_id' => $user->id,
+                'ip' => request()->ip(),
+            ],
+        ]);
+        $snapshot->lock();
+
+        // 3. Log Tax Application for Compliance Audit
+        if ($session->tax_amount > 0) {
+            \App\Models\OrderTaxApplication::create([
+                'order_id' => $order->id,
+                'tax_rate_id' => $session->data['tax_rate_id'] ?? null,
+                'jurisdiction' => $session->data['tax_jurisdiction'] ?? 'UNKNOWN',
+                'rate_applied' => $session->data['tax_rate_applied'] ?? 0,
+                'tax_type' => $session->data['tax_type'] ?? 'GST',
+                'taxable_amount' => $session->subtotal - $session->discount,
+                'tax_amount' => $session->tax_amount,
+                'is_inclusive' => $session->data['tax_is_inclusive'] ?? false,
+                'metadata' => [
+                    'breakdown' => $session->data['taxes'] ?? [],
+                    'calculated_at' => now()->toIso8601String(),
+                ],
+            ]);
+        }
 
         // Order Items Snapshot from Session Data
         $itemsData = $session->data['items'] ?? [];
@@ -93,10 +130,11 @@ class CreateOrderAction
                 'variant_id' => $itemSnapshot['variant_id'],
                 'product_name' => $itemSnapshot['product_name'],
                 'variant_name' => $itemSnapshot['variant_name'],
-                'sku' => $itemSnapshot['sku'], // Snapshot SKU
+                'sku' => $itemSnapshot['sku'], 
                 'quantity' => $itemSnapshot['quantity'],
-                'unit_price' => $itemSnapshot['unit_price'], // Stored Price
-                'total_price' => $itemSnapshot['total'],     // Stored Total
+                'unit_price' => $itemSnapshot['unit_price'], 
+                'total_price' => $itemSnapshot['total'],     
+                'price_snapshot' => $itemSnapshot['price_snapshot'] ?? null,
                 'image' => $itemSnapshot['image'] ?? null,
             ]);
         }

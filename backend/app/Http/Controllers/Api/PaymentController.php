@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Services\PaymentService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Stripe\Stripe;
-use Stripe\Webhook;
-use Stripe\Exception\SignatureVerificationException;
+use App\Services\PaymentService;
+use App\Enums\ApiErrorCode;
 
 class PaymentController extends Controller
 {
@@ -22,7 +21,7 @@ class PaymentController extends Controller
     /**
      * Handle Stripe Webhook
      */
-    public function handleWebhook(Request $request)
+    public function handleWebhook(Request $request): JsonResponse
     {
         $payload = $request->getContent();
         $sigHeader = $request->header('Stripe-Signature');
@@ -30,50 +29,40 @@ class PaymentController extends Controller
 
         if (!$sigHeader || !$endpointSecret) {
             Log::error('Stripe Webhook Error: Missing signature or endpoint secret');
-            return response()->json(['error' => 'Webhook configuration missing'], 400);
+            return $this->error('Webhook configuration missing', ApiErrorCode::WEBHOOK_CONFIG_MISSING->value, 400);
         }
 
         try {
-            // Task 1.2: Cryptographic Signature Verification (Refactored to Gateway)
             $gateway = app(\App\Services\Payment\StripePaymentGateway::class);
             if (!$gateway->verifyWebhookSignature($payload, $sigHeader, $endpointSecret)) {
-                return response()->json(['error' => 'Invalid signature'], 400);
+                return $this->error('Invalid signature', ApiErrorCode::INVALID_SIGNATURE->value, 400);
             }
 
-            // Using standard Stripe event decoding after manual signature check if needed
-            // or just using the constructEvent indirectly. 
-            // Here we know signature is valid, so we can decode.
             $event = json_decode($payload);
-
             Log::info('Stripe Webhook Verified: ' . $event->type);
 
             switch ($event->type) {
                 case 'payment_intent.succeeded':
-                    $paymentIntent = $event->data->object;
-                    $this->handlePaymentIntentSucceeded($paymentIntent);
+                    $this->handlePaymentIntentSucceeded($event->data->object);
                     break;
 
                 case 'payment_intent.payment_failed':
-                    $paymentIntent = $event->data->object;
-                    $this->handlePaymentIntentFailed($paymentIntent);
+                    $this->handlePaymentIntentFailed($event->data->object);
                     break;
 
                 default:
                     Log::info('Received verified unknown event type ' . $event->type);
             }
 
-            return response()->json(['status' => 'success']);
+            return $this->success(null, 'Webhook processed');
 
-        } catch (\Stripe\Exception\SignatureVerificationException $e) {
-            Log::error('Stripe Webhook Signature Verification Failed: ' . $e->getMessage());
-            return response()->json(['error' => 'Invalid signature'], 400);
         } catch (\Exception $e) {
             Log::error('Webhook Error: ' . $e->getMessage());
-            return response()->json(['error' => 'Webhook processing failed'], 400);
+            return $this->error('Webhook processing failed', ApiErrorCode::WEBHOOK_FAILED->value, 400);
         }
     }
 
-    private function handlePaymentIntentSucceeded($paymentIntent)
+    private function handlePaymentIntentSucceeded(object $paymentIntent): void
     {
         Log::info('Handling Payment Success', ['id' => $paymentIntent->id]);
 
@@ -81,13 +70,12 @@ class PaymentController extends Controller
         if ($orderId) {
             $order = \App\Models\Order::find($orderId);
             if ($order) {
-                // Task 2.2: State Machine enforcement via PaymentService
                 $this->paymentService->handlePaymentSuccess($order, $paymentIntent->id);
             }
         }
     }
 
-    private function handlePaymentIntentFailed($paymentIntent)
+    private function handlePaymentIntentFailed(object $paymentIntent): void
     {
         Log::warning('Handling Payment Failure', ['id' => $paymentIntent->id]);
 
@@ -103,17 +91,26 @@ class PaymentController extends Controller
     /**
      * Get available payment gateways
      */
-    public function gateways()
+    public function gateways(): JsonResponse
     {
-        // For now, return hardcoded list or fetch from config
-        return response()->json([
-            'data' => [
-                [
-                    'id' => 'stripe',
-                    'name' => 'Stripe',
-                    'enabled' => (bool) config('payment.stripe.enabled', true), // fetch from ConfigService ideally
-                    'icon' => 'card'
-                ]
+        return $this->success([
+            [
+                'id' => 'stripe',
+                'name' => 'Stripe',
+                'enabled' => (bool) config('payment.stripe.enabled', true),
+                'icon' => 'card'
+            ],
+            [
+                'id' => 'razorpay',
+                'name' => 'Razorpay',
+                'enabled' => (bool) config('payment.razorpay.enabled', true),
+                'icon' => 'credit-card'
+            ],
+            [
+                'id' => 'cod',
+                'name' => 'Cash on Delivery',
+                'enabled' => true,
+                'icon' => 'truck'
             ]
         ]);
     }
@@ -121,18 +118,12 @@ class PaymentController extends Controller
     /**
      * Initiate a payment
      */
-    /**
-     * Initiate a payment (Strict Flow: CheckoutSession / Legacy: Order)
-     */
-    /**
-     * Initiate a payment (Strict Flow: CheckoutSession / Legacy: Order)
-     */
-    public function initiate(Request $request)
+    public function initiate(Request $request): JsonResponse
     {
         $request->validate([
             'checkout_id' => 'required_without:order_id|exists:checkout_sessions,id',
             'order_id' => 'required_without:checkout_id|exists:orders,id',
-            'source' => 'nullable|string', // Optional for Payment Element (Intent Creation)
+            'source' => 'nullable|string', 
             'method' => 'string',
             'razorpay_order_id' => 'nullable|string',
             'razorpay_signature' => 'nullable|string'
@@ -140,99 +131,84 @@ class PaymentController extends Controller
 
         try {
             if ($request->checkout_id) {
-                // STRICT FLOW: Pay against immutable CheckoutSession
                 $session = \App\Models\CheckoutSession::findOrFail($request->checkout_id);
 
-                // Verify ownership
                 if ($session->user_id !== auth()->id()) {
-                    return response()->json(['error' => 'Unauthorized'], 403);
+                    return $this->error('Unauthorized', ApiErrorCode::UNAUTHORIZED->value, 403);
                 }
 
                 if ($session->expires_at && $session->expires_at->isPast()) {
-                    return response()->json(['error' => 'Checkout session expired'], 400);
+                    return $this->error('Checkout session expired', ApiErrorCode::SESSION_EXPIRED->value, 400);
                 }
 
                 if (empty($request->source)) {
-                    // MODE 1: Create Intent (Payment Element Flow)
                     $result = $this->paymentService->createCheckoutIntent($session, $request->method ?? 'card');
                 } else {
-                    // MODE 2: Capture/Confirm (Token Flow)
                     $options = [];
                     if ($request->has('razorpay_signature')) {
                         $options['razorpay_signature'] = $request->razorpay_signature;
                         $options['razorpay_order_id'] = $request->razorpay_order_id;
                     }
-
                     $result = $this->paymentService->processCheckoutPayment($session, $request->source, $request->method ?? 'card', $options);
                 }
-
             } else {
-                // LEGACY / REPAYMENT FLOW
                 $order = \App\Models\Order::findOrFail($request->order_id);
-                // Check ownership
                 if ($order->user_id !== auth()->id()) {
-                    return response()->json(['error' => 'Unauthorized'], 403);
+                    return $this->error('Unauthorized', ApiErrorCode::UNAUTHORIZED->value, 403);
                 }
 
-                // Legacy flow currently requires source, but if we wanted to support Intent creation for orders, we could here.
-                // For now, enforce source for legacy orders or throw error if missing.
                 if (empty($request->source)) {
-                    // TODO: Implement createOrderIntent if needed.
-                    return response()->json(['error' => 'Source required for legacy order payment'], 400);
+                    return $this->error('Source required for legacy order payment', ApiErrorCode::SOURCE_REQUIRED->value, 400);
                 }
 
                 $result = $this->paymentService->processPayment($order, $request->source, $request->method ?? 'card');
             }
 
             if ($result['success']) {
-                return response()->json([
-                    'success' => true,
+                return $this->success([
                     'transaction_id' => $result['transaction_id'],
-                    'client_secret' => $result['client_secret'] ?? null, // Return secret if created
-                ]);
+                    'client_secret' => $result['client_secret'] ?? null,
+                ], 'Payment initiated');
             } else {
-                return response()->json([
-                    'success' => false,
-                    'message' => $result['message']
-                ], 400);
+                return $this->error($result['message'], ApiErrorCode::PAYMENT_FAILED->value, 400);
             }
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return $this->error($e->getMessage(), ApiErrorCode::PAYMENT_ERROR->value, 500);
         }
     }
 
     /**
      * Verify a payment
      */
-    public function verify(Request $request)
+    public function verify(Request $request): JsonResponse
     {
         $request->validate(['payment_id' => 'required|string']);
 
         $success = $this->paymentService->verifyPayment($request->payment_id);
 
-        return response()->json(['success' => $success]);
+        return $this->success(['success' => $success]);
     }
 
     /**
      * Handle failed payment frontend callback
      */
-    public function failed(Request $request)
+    public function failed(Request $request): JsonResponse
     {
         Log::info('Payment reported failed by frontend', $request->all());
-        return response()->json(['status' => 'logged']);
+        return $this->success(null, 'Failure logged');
     }
 
     // Admin Methods Stubs
-    public function index()
+    public function index(): JsonResponse
     {
-        return response()->json(['data' => []]);
+        return $this->success([]);
     }
-    public function updateGateway($id)
+    public function updateGateway($id): JsonResponse
     {
-        return response()->json(['status' => 'updated']);
+        return $this->success(null, 'Gateway updated');
     }
-    public function transactions($orderId)
+    public function transactions($orderId): JsonResponse
     {
-        return response()->json(['data' => []]);
+        return $this->success([]);
     }
 }

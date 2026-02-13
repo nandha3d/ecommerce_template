@@ -80,25 +80,11 @@ class OrderController extends Controller
     /**
      * Create new order.
      */
-    public function store(Request $request): JsonResponse
+    public function store(\App\Http\Requests\OrderCreateRequest $request): JsonResponse
     {
         $this->authorize('create', Order::class);
 
-        $request->validate([
-            'payment_method' => 'required|string|in:card,paypal,cod,razorpay',
-            'billing_address_id' => 'sometimes|exists:addresses,id',
-            'shipping_address_id' => 'sometimes|exists:addresses,id',
-            'billing_address' => 'sometimes|array',
-            'billing_address.name' => 'required_with:billing_address|string',
-            'billing_address.phone' => 'required_with:billing_address|string',
-            'billing_address.address_line_1' => 'required_with:billing_address|string',
-            'billing_address.city' => 'required_with:billing_address|string',
-            'billing_address.state' => 'required_with:billing_address|string',
-            'billing_address.postal_code' => 'required_with:billing_address|string',
-            'billing_address.country' => 'required_with:billing_address|string',
-            'same_as_billing' => 'sometimes|boolean',
-            'notes' => 'sometimes|string|max:500',
-        ]);
+        $validated = $request->validated();
 
         $user = auth()->user();
         $idempotencyKey = $request->header('Idempotency-Key');
@@ -118,7 +104,7 @@ class OrderController extends Controller
         }
 
         try {
-            $orderData = $request->all();
+            $orderData = $validated;
             if ($idempotencyKey) {
                 $orderData['idempotency_key'] = $idempotencyKey;
             }

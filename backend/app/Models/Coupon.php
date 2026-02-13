@@ -15,7 +15,8 @@ class Coupon extends Model
         'type',
         'value',
         'min_order_amount',
-        'max_uses',
+        'usage_limit',
+        'max_uses_per_user',
         'used_count',
         'starts_at',
         'expires_at',
@@ -23,8 +24,10 @@ class Coupon extends Model
     ];
 
     protected $casts = [
-        'value' => 'decimal:2',
-        'min_order_amount' => 'decimal:2',
+        'value' => 'integer',
+        'usage_limit' => 'integer',
+        'max_uses_per_user' => 'integer',
+        'min_order_amount' => 'integer',
         'starts_at' => 'datetime',
         'expires_at' => 'datetime',
         'is_active' => 'boolean',
@@ -33,7 +36,7 @@ class Coupon extends Model
     /**
      * Check if the coupon is valid.
      */
-    public function isValid(): bool
+    public function isValid(?User $user = null): bool
     {
         if (!$this->is_active) {
             return false;
@@ -49,8 +52,19 @@ class Coupon extends Model
             return false;
         }
 
-        if ($this->max_uses && $this->used_count >= $this->max_uses) {
+        if ($this->usage_limit && $this->used_count >= $this->usage_limit) {
             return false;
+        }
+
+        if ($user && $this->max_uses_per_user) {
+            $userUsage = Order::where('user_id', $user->id)
+                ->where('coupon_id', $this->id)
+                ->whereNotIn('status', ['cancelled'])
+                ->count();
+            
+            if ($userUsage >= $this->max_uses_per_user) {
+                return false;
+            }
         }
 
         return true;
@@ -82,8 +96,8 @@ class Coupon extends Model
                 $q->whereNull('expires_at')->orWhere('expires_at', '>=', $now);
             })
             ->where(function ($q) {
-                $q->whereNull('max_uses')
-                    ->orWhereColumn('used_count', '<', 'max_uses');
+                $q->whereNull('usage_limit')
+                    ->orWhereColumn('used_count', '<', 'usage_limit');
             });
     }
 }

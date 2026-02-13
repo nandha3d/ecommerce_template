@@ -4,51 +4,61 @@ namespace App\Services\Payment;
 
 use App\Contracts\PaymentGatewayInterface;
 use App\Services\ConfigurationService;
-use Razorpay\Api\Api;
+use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Log;
 
 class RazorpayPaymentGateway implements PaymentGatewayInterface
 {
-    protected $api;
-    protected $currency;
+    private ?Client $client = null;
+    private ?string $keyId = null;
+    private ?string $keySecret = null;
+    private string $baseUrl = 'https://api.razorpay.com/v1/';
 
     public function __construct(ConfigurationService $config)
     {
-        $keyId = config('services.razorpay.key_id');
-        $keySecret = config('services.razorpay.key_secret');
-        $this->currency = config('services.razorpay.currency', 'INR');
+        $this->keyId = config('services.razorpay.key_id');
+        $this->keySecret = config('services.razorpay.key_secret');
 
-        if ($keyId && $keySecret) {
-            $this->api = new Api($keyId, $keySecret);
-        } else {
-            Log::warning('Razorpay keys not configured.');
+        if (empty($this->keyId) || empty($this->keySecret)) {
+            if (config('app.env') === 'production') {
+                throw new \RuntimeException('Razorpay API keys are not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env');
+            }
+            Log::warning('Razorpay keys not configured — payment processing will fail.');
         }
+
+        $this->client = new Client([
+            'base_uri' => $this->baseUrl,
+            'auth' => [$this->keyId ?? '', $this->keySecret ?? ''],
+            'headers' => [
+                'Content-Type' => 'application/json',
+            ],
+            'verify' => config('app.env') === 'production',
+        ]);
     }
 
-    public function createIntent(float $amount, string $currency, array $options = []): array
+    public function createIntent(int $amount, string $currency, array $options = []): array
     {
         try {
-            // Razorpay "Orders" are equivalent to PaymentIntents for the purpose of locking amount/receipt.
-            // https://razorpay.com/docs/api/orders/
+            $amountInSmallestUnit = $amount;
             
-            $amountInSmallestUnit = $this->getAmountInSmallestUnit($amount, $currency);
-            
-            $orderData = [
-                'receipt'         => $options['receipt'] ?? uniqid('rcpt_'),
-                'amount'          => $amountInSmallestUnit,
-                'currency'        => strtoupper($currency),
-                'payment_capture' => 1, // Auto capture
-                'notes'           => $options['metadata'] ?? []
-            ];
+            $response = $this->client->post('orders', [
+                'json' => [
+                    'receipt'         => $options['receipt'] ?? uniqid('rcpt_'),
+                    'amount'          => $amountInSmallestUnit,
+                    'currency'        => strtoupper($currency),
+                    'payment_capture' => 1,
+                    'notes'           => $options['metadata'] ?? []
+                ]
+            ]);
 
-            $order = $this->api->order->create($orderData);
+            $data = json_decode($response->getBody()->getContents(), true);
 
             return [
                 'success' => true,
-                'client_secret' => $order->id, // For Razorpay, the order_id is the key identifier used on frontend
-                'transaction_id' => $order->id,
-                'status' => $order->status,
-                'data' => $order->toArray()
+                'client_secret' => $data['id'],
+                'transaction_id' => $data['id'],
+                'status' => $data['status'],
+                'data' => $data
             ];
 
         } catch (\Exception $e) {
@@ -60,40 +70,36 @@ class RazorpayPaymentGateway implements PaymentGatewayInterface
         }
     }
 
-    public function charge(float $amount, string $currency, string $source, array $options = []): array
+    public function charge(int $amount, string $currency, string $source, array $options = []): array
     {
-        // For Razorpay Standard Layout, the "charge" is usually verifying the payment signature 
-        // after the frontend success. 
-        
         try {
-            // Verify Signature if provided (Critical for security)
+            // Verify Signature manually if provided
             if (isset($options['razorpay_signature']) && isset($options['razorpay_order_id'])) {
-                $attributes = [
-                    'razorpay_order_id' => $options['razorpay_order_id'],
-                    'razorpay_payment_id' => $source,
-                    'razorpay_signature' => $options['razorpay_signature']
-                ];
-                
-                try {
-                    $this->api->utility->verifyPaymentSignature($attributes);
-                } catch (\Exception $e) {
-                     Log::critical("Razorpay Signature Verification Failed: " . $e->getMessage());
-                     throw new \Exception("Payment verification failed (Invalid Signature)");
+                $expectedSignature = hash_hmac('sha256', $options['razorpay_order_id'] . '|' . $source, $this->keySecret);
+                if (!hash_equals($expectedSignature, $options['razorpay_signature'])) {
+                    Log::critical("Razorpay Signature Verification Failed");
+                    throw new \Exception("Payment verification failed (Invalid Signature)");
                 }
             }
             
-            $payment = $this->api->payment->fetch($source);
+            $response = $this->client->get("payments/{$source}");
+            $payment = json_decode($response->getBody()->getContents(), true);
             
-            // If we need to capture manually:
-            if ($payment->status === 'authorized') {
-                $payment->capture(['amount' => $payment->amount, 'currency' => $payment->currency]);
+            if ($payment['status'] === 'authorized') {
+                $response = $this->client->post("payments/{$source}/capture", [
+                    'json' => [
+                        'amount' => $payment['amount'], 
+                        'currency' => $payment['currency']
+                    ]
+                ]);
+                $payment = json_decode($response->getBody()->getContents(), true);
             }
 
             return [
-                'success' => $payment->status === 'captured',
-                'transaction_id' => $payment->id,
-                'status' => $payment->status,
-                'data' => $payment->toArray(),
+                'success' => $payment['status'] === 'captured',
+                'transaction_id' => $payment['id'],
+                'status' => $payment['status'],
+                'data' => $payment,
             ];
         } catch (\Exception $e) {
              Log::error('Razorpay Charge/Fetch Failed: ' . $e->getMessage());
@@ -104,25 +110,25 @@ class RazorpayPaymentGateway implements PaymentGatewayInterface
         }
     }
 
-    public function refund(string $transactionId, ?float $amount = null): array
+    public function refund(string $transactionId, ?int $amount = null): array
     {
         try {
             $params = [];
             if ($amount !== null) {
-                 // Razorpay expects amount in smallest unit
-                 // We need to know currency logic, but usually it defaults to INR (paise)
-                 // This might be risky if we don't know the original transaction currency
-                 // But for now typical use case:
-                 $params['amount'] = (int) ($amount * 100); 
+                 $params['amount'] = $amount; 
             }
 
-            $refund = $this->api->payment->fetch($transactionId)->refund($params);
+            $response = $this->client->post("payments/{$transactionId}/refund", [
+                'json' => $params
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
 
             return [
                 'success' => true,
-                'transaction_id' => $refund->id,
-                'status' => $refund->status,
-                'data' => $refund->toArray(),
+                'transaction_id' => $data['id'],
+                'status' => $data['status'],
+                'data' => $data,
             ];
 
         } catch (\Exception $e) {
@@ -136,13 +142,14 @@ class RazorpayPaymentGateway implements PaymentGatewayInterface
 
     public function verify(string $paymentId): array
     {
-        // This acts as a fetch/status check
         try {
-            $payment = $this->api->payment->fetch($paymentId);
+            $response = $this->client->get("payments/{$paymentId}");
+            $data = json_decode($response->getBody()->getContents(), true);
+
              return [
-                'success' => $payment->status === 'captured',
-                'status' => $payment->status,
-                'data' => $payment->toArray(),
+                'success' => $data['status'] === 'captured',
+                'status' => $data['status'],
+                'data' => $data,
             ];
         } catch (\Exception $e) {
              return [
@@ -154,17 +161,15 @@ class RazorpayPaymentGateway implements PaymentGatewayInterface
     
     public function verifySignature($attributes)
     {
-        try {
-            $this->api->utility->verifyPaymentSignature($attributes);
-            return true;
-        } catch (\Exception $e) {
-            return false;
-        }
+        $expectedSignature = hash_hmac('sha256', $attributes['razorpay_order_id'] . '|' . $attributes['razorpay_payment_id'], $this->keySecret);
+        return hash_equals($expectedSignature, $attributes['razorpay_signature']);
     }
 
-    private function getAmountInSmallestUnit(float $amount, string $currency): int
+    /**
+     * @deprecated Use integers directly
+     */
+    private function getAmountInSmallestUnit(int $amount, string $currency): int
     {
-        // Razorpay supports mostly currencies where 1 unit = 100 subunits
-        return (int) round($amount * 100);
+        return $amount;
     }
 }

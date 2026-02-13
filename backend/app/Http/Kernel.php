@@ -45,7 +45,7 @@ class Kernel extends HttpKernel
      *
      * @var array<string, class-string|string>
      */
-    protected $middlewareAliases = [
+    protected $routeMiddleware = [
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
@@ -53,6 +53,9 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'admin' => \App\Http\Middleware\AdminMiddleware::class,
         'license' => \App\Http\Middleware\ValidLicenseMiddleware::class,
+        'can' => \Illuminate\Auth\Middleware\Authorize::class,
+        'signed' => \Illuminate\Routing\Middleware\ValidateSignature::class,
+        'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'payment.rate_limit' => \App\Http\Middleware\PaymentRateLimiter::class,
         'rate.limit' => \App\Http\Middleware\RateLimiter::class,
         'cache' => \App\Http\Middleware\CacheHeaders::class,

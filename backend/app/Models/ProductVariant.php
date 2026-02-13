@@ -8,15 +8,20 @@ use Illuminate\Database\Eloquent\Model;
 class ProductVariant extends Model
 {
     use HasFactory;
+    
+    protected $appends = ['profit_margin'];
 
     protected $fillable = [
         'product_id',
         'sku',
+        'manufacturer_code',
+        'barcode',
         'name',
         'price',
         'sale_price',
         'cost_price',
         'stock_quantity',
+        'low_stock_threshold',
         'attributes',
         'image',
         'weight',
@@ -27,9 +32,10 @@ class ProductVariant extends Model
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
-        'sale_price' => 'decimal:2',
-        'cost_price' => 'decimal:2',
+        'price' => 'integer',
+        'sale_price' => 'integer',
+        'cost_price' => 'integer',
+        'low_stock_threshold' => 'integer',
         'weight' => 'decimal:2',
         'length' => 'decimal:2',
         'breadth' => 'decimal:2',
@@ -37,6 +43,22 @@ class ProductVariant extends Model
         'attributes' => 'array',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * Relationship: Inventory Ledger
+     */
+    public function inventoryLedger()
+    {
+        return $this->hasMany(InventoryLedger::class, 'variant_id');
+    }
+
+    /**
+     * Relationship: Cost Breakdown
+     */
+    public function costBreakdown()
+    {
+        return $this->hasOne(VariantCostBreakdown::class, 'variant_id');
+    }
 
     /**
      * Boot the model with cascade deletion guards.
@@ -116,6 +138,36 @@ class ProductVariant extends Model
             return '';
         }
         return collect($this->attributes)->map(fn($v, $k) => "$k: $v")->join(', ');
+    }
+
+    /**
+     * Get profit margin.
+     * Logic: (Price - Total Cost) / Price * 100
+     */
+    public function getProfitMarginAttribute()
+    {
+        $totalCost = $this->costBreakdown?->total_cost ?? $this->cost_price;
+        if (!$totalCost || !$this->price) return 0;
+
+        return round((($this->price - $totalCost) / $this->price) * 100, 2);
+    }
+
+    /**
+     * Adjust stock and record in ledger.
+     */
+    public function adjustStock(int $change, string $reason, ?int $orderId = null, ?int $userId = null)
+    {
+        $newQuantity = $this->stock_quantity + $change;
+        
+        $this->update(['stock_quantity' => $newQuantity]);
+
+        return $this->inventoryLedger()->create([
+            'quantity_change' => $change,
+            'new_quantity' => $newQuantity,
+            'reason' => $reason,
+            'order_id' => $orderId,
+            'user_id' => $userId,
+        ]);
     }
 
     /**

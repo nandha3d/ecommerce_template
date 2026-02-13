@@ -101,4 +101,77 @@ class CheckoutService
             ];
         });
     }
+
+    /**
+     * Validate order before creation (Phase 1: Order Validation Contract).
+     */
+    public function validateOrder(User $user, ?string $sessionId): array
+    {
+        $cart = app(\Core\Cart\Services\CartService::class)->getCart($user->id, $sessionId);
+        $cart->load(['items.product', 'items.variant', 'coupon']);
+
+        if ($cart->items->isEmpty()) {
+            throw new \RuntimeException("Cart is empty");
+        }
+
+        // 1. Recalculate Totals (authoritative) via PricingEngine
+        // This ensures frontend never dictates the price.
+        $this->recalculateTotals($cart);
+
+        // 2. Create authoritative session snapshot
+        $session = $this->sessionManager->start($cart, $user->id);
+
+        // 3. Return authoritative data in structure FE expects
+        $currency = \App\Models\Currency::where('is_base', true)->firstOr(function () {
+            $code = config('pricing.default_currency_code', 'INR');
+            $symbols = ['INR' => '₹', 'USD' => '$', 'EUR' => '€', 'GBP' => '£'];
+            return new \App\Models\Currency([
+                'code' => $code,
+                'symbol' => $symbols[$code] ?? $code,
+                'decimal_places' => 2,
+            ]);
+        });
+
+        $format = function($amount) use ($currency) {
+            $val = $amount / 100;
+            return $currency->symbol . number_format($val, $currency->decimal_places ?? 2);
+        };
+
+        return [
+            'checkout_id' => $session->id,
+            'pricing' => [
+                'subtotal' => [
+                    'base' => $session->subtotal,
+                    'display' => ['formatted' => $format($session->subtotal)]
+                ],
+                'tax' => [
+                    'base' => $session->tax_amount,
+                    'display' => ['formatted' => $format($session->tax_amount)]
+                ],
+                'shipping' => [
+                    'base' => $session->shipping_cost,
+                    'display' => ['formatted' => $format($session->shipping_cost)]
+                ],
+                'discount' => [
+                    'base' => $session->discount,
+                    'display' => ['formatted' => $format($session->discount)]
+                ],
+                'total' => [
+                    'base' => $session->total,
+                    'display' => [
+                        'formatted' => $format($session->total),
+                        'currency' => $currency->code
+                    ]
+                ],
+            ],
+            'currency' => [
+                'code' => $currency->code,
+                'symbol' => $currency->symbol,
+                'precision' => $currency->decimal_places ?? 2,
+            ],
+            'valid' => true,
+            'validation_status' => 'valid',
+            'expires_at' => $session->expires_at->toIso8601String(),
+        ];
+    }
 }

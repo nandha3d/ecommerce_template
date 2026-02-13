@@ -21,4 +21,35 @@ class SystemController extends Controller
             'data' => $settings
         ]);
     }
+
+    public function getVariantBuilderConfig(): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'maxImagesPerVariant' => 10,
+                'maxDuplicateCount' => 50,
+                'allowedImageFormats' => ['image/jpeg', 'image/png', 'image/webp'],
+                'maxImageSizeBytes' => 5 * 1024 * 1024, // 5MB
+                'skuFormat' => '{baseSku}-{attributeCodes}',
+                'titleFormat' => '{productName} - {attributes}',
+                'validationRules' => [
+                    'priceMinimum' => 0,
+                    'stockMinimum' => 0,
+                    'weightMinimum' => 0,
+                    'dimensionsRequired' => false,
+                ],
+                'fieldLabels' => [
+                    'cost' => 'Cost price',
+                    'price' => 'Selling Price',
+                    'salePrice' => 'Offer Price',
+                    'stock' => 'Stock Qty',
+                    'weight' => 'Net Wt(kg)',
+                    'length' => 'L',
+                    'breadth' => 'B',
+                    'height' => 'H'
+                ]
+            ]
+        ]);
+    }
 }

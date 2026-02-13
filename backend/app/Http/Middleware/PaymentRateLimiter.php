@@ -17,34 +17,51 @@ class PaymentRateLimiter
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $maxAttempts = config('rate_limits.payment.attempts', 10);
-        $decayMinutes = config('rate_limits.payment.decay_minutes', 5);
+        // Different limits for different operations
+        $isInitialization = !$request->has('source'); // No source = initialization or intent creation
+        
+        if ($isInitialization) {
+            $maxAttempts = 20; // More lenient for initialization
+            $decayMinutes = 2;
+            $keyPrefix = 'payment_init:';
+        } else {
+            $maxAttempts = 5; // Strict for actual payment charges
+            $decayMinutes = 10;
+            $keyPrefix = 'payment_charge:';
+        }
 
         $ip = $request->ip();
-        $key = 'payment_rate_limit:' . $ip;
+        $key = $keyPrefix . $ip;
         
         $attempts = Cache::get($key, 0);
         
         if ($attempts >= $maxAttempts) {
+            $expiresAt = Cache::get($key . ':expires_at', now());
+            $retryAfter = $expiresAt instanceof \DateTimeInterface ? $expiresAt->diffInSeconds(now()) : 0;
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Too many payment attempts. Please try again later.',
                 'error_code' => 'RATE_LIMIT_EXCEEDED',
-                'retry_after' => Cache::get($key . ':expires_at', now())->diffInSeconds(now()),
+                'retry_after' => max(0, $retryAfter),
             ], 429);
-        }
-        
-        // Increment attempt count
-        if ($attempts === 0) {
-            Cache::put($key, 1, now()->addMinutes($decayMinutes));
-            Cache::put($key . ':expires_at', now()->addMinutes($decayMinutes), now()->addMinutes($decayMinutes));
-        } else {
-            Cache::increment($key);
         }
         
         $response = $next($request);
         
-        // Add rate limit headers
+        // Logic for incrementing attempts:
+        // 1. Always increment on the first successful initial request to set the window
+        // 2. Increment on failed responses (SCA, server errors, etc.)
+        // 3. Do not increment on repeated successful initializations if within window (for refreshes)
+        if ($response->status() >= 400 || $attempts === 0) {
+            if ($attempts === 0) {
+                Cache::put($key, 1, now()->addMinutes($decayMinutes));
+                Cache::put($key . ':expires_at', now()->addMinutes($decayMinutes), now()->addMinutes($decayMinutes));
+            } else {
+                Cache::increment($key);
+            }
+        }
+        
         $response->headers->set('X-RateLimit-Limit', $maxAttempts);
         $response->headers->set('X-RateLimit-Remaining', max(0, $maxAttempts - $attempts - 1));
         

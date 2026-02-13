@@ -53,20 +53,15 @@ class FraudDetectionService
         }
         
         // 4. High value transaction
-        $highThreshold = $this->config->getFloat('fraud.amount.high_threshold', 10000);
-        $mediumThreshold = $this->config->getFloat('fraud.amount.medium_threshold', 5000); // Wait, prompt didn't strictly ask for medium, but good practice.
-        // Actually prompt example used medium logic. 
-        // "if ($amount >= $highThreshold) { return $highScore; } elseif ... "
+        $highThreshold = $this->config->getInt('fraud.amount.high_threshold', 10000);
+        $mediumThreshold = $this->config->getInt('fraud.amount.medium_threshold', 5000); 
         
         // Adapting existing logic to config:
         if ($amount >= $highThreshold) {
             $score += $this->config->getInt('fraud.score.high_amount', 15);
             $riskFactors[] = 'high_value_transaction';
-        } elseif ($amount >= 5000) { // Keeping 5000 if not in config defaults or use generic logic? 
-            // I should disable hardcode. Let's assume medium logic is desired or just stick to what was there but config'd.
-            // The prompt "Hardcoded Risk Scores" section showed replacing the whole block.
-            // I'll stick to the prompt's suggested replacement logic structure where applicable.
-            $score += 8; // The prompt suggested config for this. 'fraud.score.medium_amount'
+        } elseif ($amount >= $mediumThreshold) { 
+            $score += 8; 
              $riskFactors[] = 'medium_value_transaction';
         }
         
@@ -118,7 +113,7 @@ class FraudDetectionService
     /**
      * Check velocity limits and return score contribution
      */
-    private function checkVelocity(?string $email, ?string $ip, ?int $userId, float $amount): array
+    private function checkVelocity(?string $email, ?string $ip, ?int $userId, int $amount): array
     {
         $score = 0;
         $factors = [];

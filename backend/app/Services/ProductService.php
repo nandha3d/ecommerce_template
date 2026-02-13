@@ -24,10 +24,156 @@ class ProductService
         $this->mediaService = $mediaService;
         $this->variantValidator = $variantValidator;
     }
-
+    
     public function createProduct(array $data): Product
     {
-        // ... (existing code)
+        return DB::transaction(function () use ($data) {
+            $productData = array_intersect_key($data, array_flip([
+                'name', 'slug', 'sku', 'description', 'short_description',
+                'price', 'sale_price', 'stock_quantity', 'brand_id',
+                'is_active', 'is_featured', 'is_new', 'is_bestseller',
+                'seo_title', 'seo_description', 'ingredients',
+                'weight', 'length', 'breadth', 'height',
+                'is_digital', 'is_downloadable', 'download_limit', 'download_expiry_days',
+                'has_customization', 'customization_fields', 'custom_tabs',
+                'image_layout', 'specifications',
+                'fssai_license', 'batch_no', 'manufacturing_date', 'expiry_date',
+                'origin_country', 'hs_code', 'is_returnable', 'return_policy_days',
+                'stock_threshold', 'nutrition_facts', 'benefits', 'tags',
+                'video_link', 'og_title', 'og_description', 'og_image',
+                'twitter_title', 'twitter_description', 'twitter_image',
+                'include_in_sitemap', 'sitemap_priority', 'sitemap_change_frequency'
+            ]));
+
+            if (!isset($productData['slug']) && isset($productData['name'])) {
+                $productData['slug'] = Str::slug($productData['name']);
+            }
+
+            $product = Product::create($productData);
+
+            if (isset($data['category_ids'])) {
+                $product->categories()->sync($data['category_ids']);
+            }
+
+            if (isset($data['images']) && is_array($data['images'])) {
+                $this->syncImages($product, $data['images']);
+            }
+
+            if (isset($data['variants']) && is_array($data['variants'])) {
+                $this->upsertVariants($product, $data['variants']);
+            }
+
+            if (isset($data['addon_groups'])) {
+                $this->createAddonGroups($product, $data['addon_groups']);
+            }
+
+            return $product->load(['brand', 'categories', 'images', 'variants', 'addonGroups.options']);
+        });
+    }
+
+    public function updateProduct(Product $product, array $data): Product
+    {
+        return DB::transaction(function () use ($product, $data) {
+            // Update basic product details
+            $productData = array_intersect_key($data, array_flip([
+                'name', 'slug', 'sku', 'description', 'short_description',
+                'price', 'sale_price', 'stock_quantity', 'brand_id',
+                'is_active', 'is_featured', 'is_new', 'is_bestseller',
+                'seo_title', 'seo_description', 'ingredients',
+                'weight', 'length', 'breadth', 'height',
+                'is_digital', 'is_downloadable', 'download_limit', 'download_expiry_days',
+                'has_customization', 'customization_fields', 'custom_tabs',
+                'image_layout', 'specifications',
+                'fssai_license', 'batch_no', 'manufacturing_date', 'expiry_date',
+                'origin_country', 'hs_code', 'is_returnable', 'return_policy_days',
+                'stock_threshold', 'nutrition_facts', 'benefits', 'tags',
+                'video_link', 'og_title', 'og_description', 'og_image',
+                'twitter_title', 'twitter_description', 'twitter_image',
+                'include_in_sitemap', 'sitemap_priority', 'sitemap_change_frequency'
+            ]));
+
+            // Generate slug if name changed and slug not provided
+            if (!isset($data['slug']) && isset($data['name']) && $data['name'] !== $product->name) {
+                $productData['slug'] = Str::slug($data['name']);
+            }
+
+            $product->update($productData);
+
+            // Sync categories (many-to-many relationship)
+            if (isset($data['category_ids'])) {
+                $product->categories()->sync($data['category_ids']);
+            }
+
+            // Handle Images
+            if (isset($data['images']) && is_array($data['images'])) {
+                $this->syncImages($product, $data['images']);
+            }
+
+            // Handle Variants
+            if (isset($data['variants']) && is_array($data['variants'])) {
+                if (empty($data['variants'])) {
+                    // Cannot remove all variants
+                    throw new \RuntimeException("Product must have at least one variant.");
+                }
+                $this->upsertVariants($product, $data['variants']);
+            }
+
+            // Handle Addon Groups
+            if (isset($data['addon_groups'])) {
+                // Delete existing addon groups (cascade will delete options)
+                $product->addonGroups()->delete();
+                
+                if (!empty($data['addon_groups'])) {
+                    $this->createAddonGroups($product, $data['addon_groups']);
+                }
+            }
+
+            // Reload relationships for response
+            return $product->load([
+                'brand', 
+                'categories', 
+                'images', 
+                'variants', 
+                'addonGroups.options'
+            ]);
+        });
+    }
+
+    /**
+     * Sync product images (create, update, delete)
+     */
+    private function syncImages(Product $product, array $images): void
+    {
+        $existingIds = [];
+        
+        foreach ($images as $index => $imageData) {
+            if (isset($imageData['id'])) {
+                // Update existing image
+                $image = ProductImage::find($imageData['id']);
+                if ($image && $image->product_id === $product->id) {
+                    $image->update([
+                        'url' => $imageData['url'],
+                        'alt_text' => $imageData['alt_text'] ?? null,
+                        'is_primary' => $imageData['is_primary'] ?? false,
+                        'sort_order' => $index,
+                    ]);
+                    $existingIds[] = $image->id;
+                }
+            } else {
+                // Create new image
+                $image = ProductImage::create([
+                    'product_id' => $product->id,
+                    'url' => $imageData['url'],
+                    'alt_text' => $imageData['alt_text'] ?? null,
+                    'is_primary' => $imageData['is_primary'] ?? false,
+                    'sort_order' => $index,
+                ]);
+                $existingIds[] = $image->id;
+            }
+        }
+        
+        // Delete images not in the request
+        $product->images()->whereNotIn('id', $existingIds)->delete();
     }
 
     // ... (existing helper methods)
@@ -97,7 +243,12 @@ class ProductService
                 if (isset($variantData['id'])) {
                     $variant = ProductVariant::find($variantData['id']);
                     if ($variant && $variant->product_id === $product->id) {
-                        $variant->update($variantData);
+                        $variant->update(array_intersect_key($variantData, array_flip([
+                            'sku', 'name', 'price', 'sale_price', 'cost_price', 
+                            'stock_quantity', 'low_stock_threshold', 'attributes', 
+                            'image', 'weight', 'length', 'breadth', 'height', 
+                            'is_active', 'manufacturer_code', 'barcode'
+                        ])));
                         $existingIds[] = $variant->id;
                     }
                 } else {
@@ -107,17 +258,25 @@ class ProductService
                         'name' => $variantData['name'] ?? null,
                         'price' => $variantData['price'],
                         'sale_price' => $variantData['sale_price'] ?? null,
+                        'cost_price' => $variantData['cost_price'] ?? null,
                         'stock_quantity' => $variantData['stock_quantity'] ?? 0,
+                        'low_stock_threshold' => $variantData['low_stock_threshold'] ?? 10,
                         'attributes' => $variantData['attributes'] ?? [],
                         'image' => $variantData['image'] ?? null,
+                        'weight' => $variantData['weight'] ?? null,
+                        'length' => $variantData['length'] ?? null,
+                        'breadth' => $variantData['breadth'] ?? null,
+                        'height' => $variantData['height'] ?? null,
                         'is_active' => $variantData['is_active'] ?? true,
+                        'manufacturer_code' => $variantData['manufacturer_code'] ?? null,
+                        'barcode' => $variantData['barcode'] ?? null,
                     ]);
                     $existingIds[] = $variant->id;
                 }
                 DB::commit();
             } catch (\Exception $e) {
                 DB::rollBack();
-                throw new \RuntimeException("Variant Update Failed at index {$index} (SKU: {$variantData['sku']}): " . $e->getMessage(), 0, $e);
+                throw new \RuntimeException("Variant Update Failed at index {$index} (SKU: " . ($variantData['sku'] ?? 'N/A') . "): " . $e->getMessage(), 0, $e);
             }
         }
 

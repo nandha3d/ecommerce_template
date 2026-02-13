@@ -28,9 +28,7 @@ class CartServiceProvider extends ServiceProvider
         });
         
         // Bind PricingEngineService
-        $this->app->singleton(\App\Services\Cart\PricingEngineService::class, function ($app) {
-            return new \App\Services\Cart\PricingEngineService();
-        });
+        $this->app->singleton(\App\Services\Cart\PricingEngineService::class);
         
         // Bind TaxCalculationService
         $this->app->singleton(\App\Services\Cart\TaxCalculationService::class, function ($app) {

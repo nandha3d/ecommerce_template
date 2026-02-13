@@ -36,11 +36,11 @@ class CheckoutSession extends Model
         'completed_at' => 'datetime',
         'abandoned_at' => 'datetime',
         'expires_at' => 'datetime',
-        'subtotal' => 'decimal:2',
-        'discount' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'shipping_cost' => 'decimal:2',
-        'total' => 'decimal:2',
+        'subtotal' => 'integer',
+        'discount' => 'integer',
+        'tax_amount' => 'integer',
+        'shipping_cost' => 'integer',
+        'total' => 'integer',
     ];
 
     public function cart()

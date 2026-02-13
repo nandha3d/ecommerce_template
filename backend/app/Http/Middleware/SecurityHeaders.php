@@ -24,14 +24,38 @@ class SecurityHeaders
         // Skip CSP in development for Vite HMR compatibility
         // Only apply full CSP in production
         if (config('app.env') === 'production') {
+            // Configurable external sources for CSP
+            $scriptSources = array_filter([
+                "'self'", "'unsafe-inline'", "'unsafe-eval'",
+                'https://cdn.jsdelivr.net',
+                'https://js.stripe.com',
+                'https://checkout.razorpay.com',
+                env('CSP_EXTRA_SCRIPT_SRC'),
+            ]);
+
+            $connectSources = array_filter([
+                "'self'",
+                'https://api.stripe.com',
+                'https://api.razorpay.com',
+                'wss:',
+                env('CSP_EXTRA_CONNECT_SRC'),
+            ]);
+
+            $frameSources = array_filter([
+                "'self'",
+                'https://js.stripe.com',
+                'https://api.razorpay.com',
+                env('CSP_EXTRA_FRAME_SRC'),
+            ]);
+
             $csp = implode('; ', [
                 "default-src 'self'",
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://js.stripe.com https://checkout.razorpay.com",
+                "script-src " . implode(' ', $scriptSources),
                 "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
                 "img-src 'self' data: blob: https: http:",
                 "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:",
-                "connect-src 'self' https://api.stripe.com https://api.razorpay.com wss:",
-                "frame-src 'self' https://js.stripe.com https://api.razorpay.com",
+                "connect-src " . implode(' ', $connectSources),
+                "frame-src " . implode(' ', $frameSources),
                 "object-src 'none'",
                 "base-uri 'self'",
                 "form-action 'self'",
@@ -39,7 +63,7 @@ class SecurityHeaders
             $response->headers->set('Content-Security-Policy', $csp);
             
             // HSTS only in production
-            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
         }
 
         // Apply these headers in all environments

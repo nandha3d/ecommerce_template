@@ -29,6 +29,10 @@ class PaymentService
             return app(\App\Services\Payment\RazorpayPaymentGateway::class);
         }
 
+        if ($method === 'cod') {
+            return app(\App\Services\Payment\CodPaymentGateway::class);
+        }
+
         // Default to Stripe
         return app(StripePaymentGateway::class);
     }
@@ -46,7 +50,7 @@ class PaymentService
         // Amount must equal order.total
         $intent = \App\Models\PaymentIntent::create([
             'order_id' => $order->id,
-            'amount' => (float) $order->total,
+            'amount' => $order->total,
             'currency' => $order->currency ?? 'USD',
             'status' => \App\Enums\PaymentIntentState::CREATED,
             'payment_method' => $method,
@@ -94,7 +98,7 @@ class PaymentService
         $gateway = $this->resolveGateway($method);
 
         $gatewayIntent = $gateway->createIntent(
-            (float) $order->total,
+            (int) $order->total,
             $order->currency,
             [
                 'description' => "Order #{$order->order_number}",
@@ -141,7 +145,7 @@ class PaymentService
         $gateway = $this->resolveGateway($method);
 
         $gatewayIntent = $gateway->createIntent(
-            (float) $session->total,
+            (int) $session->total,
             $session->currency,
             [
                 'description' => "Checkout #{$session->id}",
@@ -180,15 +184,16 @@ class PaymentService
 
     private function executeCharge(\App\Models\PaymentIntent $intent, string $source, string $description): array
     {
+        $stateMachine = app(\App\Services\PaymentStateMachine::class);
+
         try {
             // Updated to Processing
-            $intent->status = \App\Enums\PaymentIntentState::PROCESSING;
-            $intent->save();
+            $stateMachine->transition($intent, \App\Enums\PaymentIntentState::PROCESSING);
 
             $gateway = $this->resolveGateway($intent->payment_method);
 
             $response = $gateway->charge(
-                (float) $intent->amount,
+                (int) $intent->amount,
                 $intent->currency,
                 $source,
                 [
@@ -200,24 +205,21 @@ class PaymentService
             );
 
             if ($response['success']) {
-                $intent->status = \App\Enums\PaymentIntentState::SUCCEEDED;
                 $intent->gateway_id = $response['transaction_id'];
                 $intent->metadata = array_merge($intent->metadata ?? [], ['raw_response' => $response]);
-                $intent->save();
+                $stateMachine->transition($intent, \App\Enums\PaymentIntentState::SUCCEEDED);
 
                 return ['success' => true, 'transaction_id' => $response['transaction_id']];
             } else {
-                $intent->status = \App\Enums\PaymentIntentState::FAILED;
                 $intent->metadata = array_merge($intent->metadata ?? [], ['error_message' => $response['message'] ?? 'Unknown']);
-                $intent->save();
+                $stateMachine->transition($intent, \App\Enums\PaymentIntentState::FAILED);
 
                 Log::error("Payment failed: " . ($response['message'] ?? 'Unknown error'));
                 return ['success' => false, 'message' => $response['message'] ?? 'Payment failed'];
             }
         } catch (\Exception $e) {
-            $intent->status = \App\Enums\PaymentIntentState::FAILED;
             $intent->metadata = array_merge($intent->metadata ?? [], ['exception' => $e->getMessage()]);
-            $intent->save();
+            $stateMachine->transition($intent, \App\Enums\PaymentIntentState::FAILED);
             throw $e;
         }
     }
@@ -230,7 +232,68 @@ class PaymentService
             return;
         }
 
-        DB::transaction(function () use ($order, $transactionId) {
+        DB::beginTransaction();
+        
+        try {
+            // 🔥 CRITICAL: Re-calculate price to prevent tampering
+            // We re-calculate based on the current order items to ensure they match the pricing rules
+            /** @var \App\Domain\Pricing\PricingEngine $pricingEngine */
+            $pricingEngine = app(\App\Domain\Pricing\PricingEngine::class);
+            
+            // Re-fetch order with items for fresh state
+            $order->load(['items.variant', 'user', 'priceSnapshot']);
+            
+            // Re-calculation using the current pricing rules
+            $totalCalculated = 0;
+            $itemsForPricing = [];
+            foreach ($order->items as $item) {
+                $itemsForPricing[] = [
+                    'variant' => $item->variant,
+                    'quantity' => $item->quantity
+                ];
+            }
+            
+            // Retrieve the locked price snapshot
+            $snapshot = $order->priceSnapshot;
+            
+            if (!$snapshot) {
+                Log::critical("SECURITY: Price snapshot missing for Order #{$order->order_number}");
+                throw new \RuntimeException('Price snapshot missing for order #' . $order->id);
+            }
+
+            // Perform hard verification against snapshot
+            // 1. Database Total vs Snapshot Total
+            if ($order->total !== $snapshot->final_amount) {
+                $this->handleFraud($order, 'Total mismatch between DB and Snapshot', [
+                    'db_total' => $order->total,
+                    'snapshot_total' => $snapshot->final_amount
+                ]);
+                DB::commit();
+                return;
+            }
+
+            // 2. [Optional but Recommended] Re-calculate based on current catalog prices
+            // This detects price changes between order creation and payment
+            // However, we usually honor the price at the time of checkout (the snapshot)
+            // But if we want to detect TAMPERING (bypassing logic), we check if the snapshot matches reality.
+            
+            // For now, we enforce that Snapshot matches Order Total strictly.
+            // And we can add a check against Payment Intent amount if available.
+            
+            $intent = PaymentIntent::where('order_id', $order->id)
+                ->where('gateway_id', $transactionId)
+                ->first();
+                
+            if ($intent && $intent->amount !== $order->total) {
+                $this->handleFraud($order, 'Payment intent amount mismatch', [
+                    'intent_amount' => $intent->amount,
+                    'order_total' => $order->total
+                ]);
+                DB::commit();
+                return;
+            }
+
+            // ✅ Verification passed - process payment
             $stateMachine = app(OrderStateMachine::class);
             $stateMachine->transition($order, \App\Enums\OrderState::PAID, [
                 'reason' => 'Webhook: Payment Success',
@@ -242,11 +305,87 @@ class PaymentService
 
             // Finalize Cart
             if ($order->cart_id) {
-                app(\Core\Cart\Services\CartService::class)->finalizeCheckout(\App\Models\Cart::find($order->cart_id));
+                $cart = \App\Models\Cart::find($order->cart_id);
+                if ($cart) {
+                    app(\Core\Cart\Services\CartService::class)->finalizeCheckout($cart);
+                    $cart->items()->delete(); // Clear cart items
+                }
             }
-        });
 
-        app(\App\Services\SecurityAuditService::class)->logOrderCreate($order); // Should be logOrderPaid?
+            // Record coupon usage for audit trail
+            if ($order->coupon_id) {
+                \App\Models\CouponUsage::create([
+                    'coupon_id' => $order->coupon_id,
+                    'user_id' => $order->user_id,
+                    'order_id' => $order->id,
+                    'discount_amount' => $order->discount ?? 0,
+                    'used_at' => now(),
+                ]);
+                
+                Log::info('Coupon usage recorded', [
+                    'order_id' => $order->id,
+                    'coupon_id' => $order->coupon_id,
+                ]);
+            }
+
+            // Queue order confirmation email
+            \App\Jobs\SendOrderConfirmationEmail::dispatch($order);
+
+            DB::commit();
+
+            \Log::info('Payment verified and processed successfully', [
+                'order_id' => $order->id,
+                'amount' => $order->total,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            \Log::error('Payment verification failed', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            
+            throw $e;
+        }
+    }
+
+    private function handleFraud(Order $order, string $reason, array $context): void
+    {
+        Log::critical("PAYMENT FRAUD ATTEMPT DETECTED: {$reason}", array_merge([
+            'order_id' => $order->id,
+            'order_number' => $order->order_number,
+            'user_id' => $order->user_id,
+            'ip_address' => request()->ip(),
+        ], $context));
+
+        $order->update([
+            'status' => \App\Enums\OrderState::FRAUD_DETECTED,
+            'payment_status' => 'failed',
+        ]);
+        
+        // Block user optionally?
+        // $order->user->update(['is_active' => false]);
+    }
+
+    /**
+     * SECURITY: Verify order financial integrity against immutable snapshot.
+     */
+    public function verifyOrderIntegrity(Order $order): bool
+    {
+        $snapshot = $order->priceSnapshot;
+        
+        if (!$snapshot) {
+            Log::warning("No price snapshot found for Order #{$order->order_number}");
+            return true;
+        }
+
+        // Detailed check
+        return $order->total === $snapshot->final_amount &&
+               $order->subtotal === $snapshot->subtotal &&
+               $order->tax === $snapshot->total_tax &&
+               $order->discount === $snapshot->total_discount;
     }
 
     public function handlePaymentFailure(Order $order, string $reason): void

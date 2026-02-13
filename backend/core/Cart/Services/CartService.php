@@ -51,37 +51,47 @@ class CartService
      */
     public function getCart(?int $userId, ?string $sessionId): Cart
     {
-        $cart = null;
-
         if ($userId) {
-            $cart = $this->cartRepository->findByUserId($userId);
-            if (!$cart) {
-                $cart = $this->cartRepository->create([
-                    'user_id' => $userId,
-                    'status' => 'active',
-                    'currency_code' => $this->config->get('currency.default', 'USD'),
-                    'locale' => $this->config->get('locale.default', 'en_US'),
-                ]);
-            }
-        } elseif ($sessionId) {
-            $cart = $this->cartRepository->findBySessionId($sessionId);
-            if (!$cart) {
-                $cart = $this->cartRepository->create([
-                    'session_id' => $sessionId,
-                    'status' => 'active',
-                    'currency_code' => $this->config->get('currency.default', 'USD'),
-                    'locale' => $this->config->get('locale.default', 'en_US'),
-                ]);
-            }
-        } else {
-            // NO user_id AND NO session_id provided - this should NOT happen
-            // CartController should always provide session_id from X-Cart-Session header
-            throw new \InvalidArgumentException(
-                "Cart cannot be created without user_id or session_id. " .
-                "Ensure X-Cart-Session header is sent from frontend."
-            );
+            return $this->getOrCreateByUser($userId);
         }
 
+        if ($sessionId) {
+            return $this->findBySessionId($sessionId) ?? $this->cartRepository->create([
+                'session_id' => $sessionId,
+                'status' => 'active',
+                'currency_code' => $this->config->get('currency.default', 'USD'),
+                'locale' => $this->config->get('locale.default', 'en_US'),
+            ]);
+        }
+
+        throw new \InvalidArgumentException(
+            "Cart cannot be created without user_id or session_id. " .
+            "Ensure X-Cart-Session header is sent from frontend."
+        );
+    }
+
+    /**
+     * Find cart by session ID.
+     */
+    public function findBySessionId(string $sessionId): ?Cart
+    {
+        return $this->cartRepository->findBySessionId($sessionId);
+    }
+
+    /**
+     * Get or create cart for user.
+     */
+    public function getOrCreateByUser(int $userId): Cart
+    {
+        $cart = $this->cartRepository->findByUserId($userId);
+        if (!$cart) {
+            $cart = $this->cartRepository->create([
+                'user_id' => $userId,
+                'status' => 'active',
+                'currency_code' => $this->config->get('currency.default', 'USD'),
+                'locale' => $this->config->get('locale.default', 'en_US'),
+            ]);
+        }
         return $cart;
     }
 
@@ -219,7 +229,7 @@ class CartService
      */
     private function ensureCartIsActive(Cart $cart): void
     {
-        if ($cart->status !== 'active') {
+        if ($cart->status !== \App\Services\CartStateMachine::STATE_ACTIVE) {
             throw new RuntimeException("Cart is locked or already checked out. Modifications forbidden.");
         }
     }
@@ -250,13 +260,55 @@ class CartService
      */
     public function finalizeCheckout(Cart $cart): void
     {
-        // Bypass active check because we are closing it
-        $cart->status = 'checked_out';
+        app(\App\Services\CartStateMachine::class)->transition($cart, \App\Services\CartStateMachine::STATE_COMPLETED);
+    }
+
+    /**
+     * Apply coupon to cart.
+     */
+    public function applyCoupon(Cart $cart, string $code): void
+    {
+        $this->ensureCartIsActive($cart);
+
+        $coupon = \App\Models\Coupon::where('code', $code)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$coupon) {
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Not found", ['code' => $code]);
+            throw new \InvalidArgumentException("This coupon code cannot be applied to your order.");
+        }
+
+        if ($coupon->expires_at && $coupon->expires_at->isPast()) {
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Expired", ['code' => $code]);
+            throw new \InvalidArgumentException("This coupon code cannot be applied to your order.");
+        }
+
+        if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Usage Limit", ['code' => $code]);
+            throw new \InvalidArgumentException("This coupon code cannot be applied to your order.");
+        }
+
+        if ($coupon->min_order_amount && $cart->subtotal < $coupon->min_order_amount) {
+            \Illuminate\Support\Facades\Log::info("Coupon failed: Min Order Amount", ['code' => $code]);
+            throw new \InvalidArgumentException("This coupon code cannot be applied to your order.");
+        }
+
+        $cart->coupon_id = $coupon->id;
         $cart->save();
-        
-        // Do NOT delete items. We want history in the Cart table if needed,
-        // or relies on the fact that CartRepository only finds active carts,
-        // effectively archiving this one.
+
+        $this->recalculate($cart);
+    }
+
+    /**
+     * Remove coupon from cart.
+     */
+    public function removeCoupon(Cart $cart): void
+    {
+        $this->ensureCartIsActive($cart);
+        $cart->coupon_id = null;
+        $cart->save();
+        $this->recalculate($cart);
     }
 
     /**

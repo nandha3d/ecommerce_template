@@ -3,13 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Cart;
-use App\Models\CartItem;
-use App\Models\Coupon;
 use App\Http\Resources\CartResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Core\Cart\Services\CartService;
+use Illuminate\Support\Facades\Log;
+use App\Enums\ApiErrorCode;
 
 class CartController extends Controller
 {
@@ -28,38 +27,31 @@ class CartController extends Controller
         $cart = $this->getOrCreateCart($request);
         $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
-        return response()->json([
-            'success' => true,
-            'data' => new CartResource($cart),
-        ])->header('X-Cart-Session', $cart->session_id);
+        return $this->success(new CartResource($cart), 'Cart retrieved', 200, ['X-Cart-Session' => $cart->session_id]);
     }
 
     /**
      * Add item to cart.
      */
-    public function addItem(Request $request): JsonResponse
+    public function addItem(\App\Http\Requests\CartItemRequest $request): JsonResponse
     {
-        $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'quantity' => 'sometimes|integer|min:1',
-            'variant_id' => 'sometimes|exists:product_variants,id',
-        ]);
-
+        $validated = $request->validated();
         $cart = $this->getOrCreateCart($request);
-        $this->cartService->addItem(
-            $cart,
-            $request->input('product_id'),
-            $request->input('quantity', 1),
-            $request->input('variant_id')
-        );
+        
+        try {
+            $this->cartService->addItem(
+                $cart,
+                $validated['product_id'],
+                $validated['quantity'] ?? 1,
+                $validated['variant_id']
+            );
 
-        $cart->load(['items.product.images', 'items.variant', 'coupon']);
+            $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Item added to cart',
-            'data' => new CartResource($cart),
-        ])->header('X-Cart-Session', $cart->session_id);
+            return $this->success(new CartResource($cart), 'Item added to cart', 200, ['X-Cart-Session' => $cart->session_id]);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::CART_EMPTY->value, 400);
+        }
     }
 
     /**
@@ -74,15 +66,15 @@ class CartController extends Controller
         $cart = $this->getOrCreateCart($request);
         $item = $cart->items()->findOrFail($itemId);
         
-        $this->cartService->updateItem($item, $request->input('quantity'));
+        try {
+            $this->cartService->updateItem($item, $request->input('quantity'));
 
-        $cart->load(['items.product.images', 'items.variant', 'coupon']);
+            $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Cart updated',
-            'data' => new CartResource($cart),
-        ])->header('X-Cart-Session', $cart->session_id);
+            return $this->success(new CartResource($cart), 'Cart updated', 200, ['X-Cart-Session' => $cart->session_id]);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::VALIDATION_ERROR->value, 400);
+        }
     }
 
     /**
@@ -93,15 +85,15 @@ class CartController extends Controller
         $cart = $this->getOrCreateCart($request);
         $item = $cart->items()->where('id', $itemId)->firstOrFail();
         
-        $this->cartService->removeItem($item);
+        try {
+            $this->cartService->removeItem($item);
 
-        $cart->load(['items.product.images', 'items.variant', 'coupon']);
+            $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Item removed from cart',
-            'data' => new CartResource($cart),
-        ])->header('X-Cart-Session', $cart->session_id);
+            return $this->success(new CartResource($cart), 'Item removed from cart', 200, ['X-Cart-Session' => $cart->session_id]);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::INTERNAL_ERROR->value, 400);
+        }
     }
 
     /**
@@ -112,10 +104,7 @@ class CartController extends Controller
         $cart = $this->getOrCreateCart($request);
         $this->cartService->clear($cart);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Cart cleared',
-        ]);
+        return $this->success(null, 'Cart cleared');
     }
 
     /**
@@ -127,54 +116,19 @@ class CartController extends Controller
             'code' => 'required|string',
         ]);
 
-        $coupon = Coupon::where('code', $request->input('code'))
-                        ->where('is_active', true)
-                        ->first();
-
-        $genericError = [
-            'success' => false,
-            'message' => 'This coupon code cannot be applied to your order.',
-        ];
-
-        // Audit Requirement: Prevent Enumeration
-        // We check all conditions but return the SAME error message.
-        // We also log the specific failure for admin debugging.
-
-        if (!$coupon) {
-            \Illuminate\Support\Facades\Log::info("Coupon failed: Not found", ['code' => $request->input('code')]);
-            return response()->json($genericError, 400);
-        }
-
-        // Check if expired
-        if ($coupon->expires_at && $coupon->expires_at->isPast()) {
-            \Illuminate\Support\Facades\Log::info("Coupon failed: Expired", ['code' => $request->input('code')]);
-            return response()->json($genericError, 400);
-        }
-
-        // Check usage limit
-        if ($coupon->usage_limit && $coupon->used_count >= $coupon->usage_limit) {
-            \Illuminate\Support\Facades\Log::info("Coupon failed: Usage Limit", ['code' => $request->input('code')]);
-            return response()->json($genericError, 400);
-        }
-
         $cart = $this->getOrCreateCart($request);
 
-        // Check minimum order amount
-        if ($coupon->min_order_amount && $cart->subtotal < $coupon->min_order_amount) {
-            \Illuminate\Support\Facades\Log::info("Coupon failed: Min Order Amount", ['code' => $request->input('code')]);
-            return response()->json($genericError, 400);
+        try {
+            $this->cartService->applyCoupon($cart, $request->input('code'));
+            $cart->load(['items.product.images', 'items.variant', 'coupon']);
+
+            return $this->success(new CartResource($cart), 'Coupon applied successfully', 200, ['X-Cart-Session' => $cart->session_id]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::INVALID_COUPON->value, 400);
+        } catch (\Exception $e) {
+            Log::error('Coupon application failed', ['error' => $e->getMessage(), 'cart_id' => $cart->id]);
+            return $this->error('Failed to apply coupon', ApiErrorCode::SERVER_ERROR->value, 500);
         }
-
-        $cart->coupon_id = $coupon->id;
-        $cart->save();
-
-        $cart->load(['items.product.images', 'items.variant', 'coupon']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Coupon applied successfully',
-            'data' => new CartResource($cart),
-        ])->header('X-Cart-Session', $cart->session_id);
     }
 
     /**
@@ -183,16 +137,15 @@ class CartController extends Controller
     public function removeCoupon(Request $request): JsonResponse
     {
         $cart = $this->getOrCreateCart($request);
-        $cart->coupon_id = null;
-        $cart->save();
+        
+        try {
+            $this->cartService->removeCoupon($cart);
+            $cart->load(['items.product.images', 'items.variant', 'coupon']);
 
-        $cart->load(['items.product.images', 'items.variant', 'coupon']);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Coupon removed',
-            'data' => new CartResource($cart),
-        ])->header('X-Cart-Session', $cart->session_id);
+            return $this->success(new CartResource($cart), 'Coupon removed', 200, ['X-Cart-Session' => $cart->session_id]);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::INTERNAL_ERROR->value, 400);
+        }
     }
 
     /**
@@ -201,10 +154,7 @@ class CartController extends Controller
     public function merge(Request $request): JsonResponse
     {
         if (!auth()->check()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Authentication required',
-            ], 401);
+            return $this->error('Authentication required', ApiErrorCode::UNAUTHORIZED->value, 401);
         }
 
         $request->validate([
@@ -216,25 +166,23 @@ class CartController extends Controller
             ],
         ]);
 
-        $guestCart = Cart::where('session_id', $request->input('guest_cart_id'))->first();
+        $guestCart = $this->cartService->findBySessionId($request->input('guest_cart_id'));
         
         if (!$guestCart) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Guest cart not found',
-            ], 404);
+            return $this->error('Guest cart not found', ApiErrorCode::CART_NOT_FOUND->value, 404);
         }
 
-        $userCart = Cart::firstOrCreate(['user_id' => auth()->id()]);
-        $this->cartService->merge($userCart, $guestCart);
+        $userCart = $this->cartService->getOrCreateByUser(auth()->id());
+        
+        try {
+            $this->cartService->merge($userCart, $guestCart);
 
-        $userCart->load(['items.product.images', 'items.variant', 'coupon']);
+            $userCart->load(['items.product.images', 'items.variant', 'coupon']);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Carts merged successfully',
-            'data' => new CartResource($userCart),
-        ])->header('X-Cart-Session', $userCart->session_id);
+            return $this->success(new CartResource($userCart), 'Carts merged successfully', 200, ['X-Cart-Session' => $userCart->session_id]);
+        } catch (\Exception $e) {
+            return $this->error($e->getMessage(), ApiErrorCode::INTERNAL_ERROR->value, 400);
+        }
     }
 
     /**
@@ -242,7 +190,7 @@ class CartController extends Controller
      * 
      * SECURITY: Validates cart ownership to prevent IDOR attacks.
      */
-    private function getOrCreateCart(Request $request): Cart
+    private function getOrCreateCart(Request $request): \App\Models\Cart
     {
         $userId = auth('api')->id();
         $sessionId = $request->header('X-Cart-Session') ?? $request->input('session_id');
@@ -252,15 +200,15 @@ class CartController extends Controller
             // Generate new session ID and return in response header
             $sessionId = 'guest_' . bin2hex(random_bytes(16)); // Cryptographically secure
             
-            \Illuminate\Support\Facades\Log::warning('Cart request without X-Cart-Session header', [
+            Log::warning('Cart request without X-Cart-Session header', [
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
             ]);
         }
 
         // Validate session ID format
-        if ($sessionId && !preg_match('/^(cart_|guest_)[a-f0-9]{32,64}$/', $sessionId)) {
-            \Illuminate\Support\Facades\Log::warning('Invalid cart session ID format', [
+        if ($sessionId && !preg_match('/^(cart_|guest_)[a-zA-Z0-9]{20,64}$/', $sessionId)) {
+            Log::warning('Invalid cart session ID format', [
                 'session_id' => $sessionId,
                 'ip' => $request->ip(),
             ]);
@@ -274,15 +222,7 @@ class CartController extends Controller
         // Ideally CartService creates it with this ID.
 
         // SECURITY: Ownership validation
-        if ($userId && $cart->user_id && $cart->user_id !== $userId) {
-            \Illuminate\Support\Facades\Log::warning('Cart ownership mismatch', [
-                'cart_id' => $cart->id,
-                'cart_user_id' => $cart->user_id,
-                'request_user_id' => $userId,
-                'ip' => $request->ip(),
-            ]);
-            abort(403, 'Access denied');
-        }
+        $this->authorize('view', $cart);
 
         // If guest request, verify session matches
         if (!$userId && $cart->session_id && $cart->session_id !== $sessionId) {
@@ -293,7 +233,7 @@ class CartController extends Controller
             
             // If we are guest, we only look by session ID.
             
-             \Illuminate\Support\Facades\Log::warning('Cart session mismatch', [
+             Log::warning('Cart session mismatch', [
                 'cart_id' => $cart->id,
                 'cart_session' => $cart->session_id,
                 'request_session' => $sessionId,

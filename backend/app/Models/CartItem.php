@@ -18,7 +18,12 @@ class CartItem extends Model
     ];
 
     protected $casts = [
-        'unit_price' => 'decimal:2',
+        'unit_price' => 'integer',
+        'sale_price' => 'integer',
+        'tax_amount' => 'integer',
+        'discount_amount' => 'integer',
+        'subtotal' => 'integer',
+        'total' => 'integer',
         'quantity' => 'integer',
     ];
 

@@ -13,11 +13,25 @@ class User extends Authenticatable implements JWTSubject
 
     protected $fillable = [
         'name',
+        'first_name',
+        'last_name',
         'email',
         'password',
         'phone',
         'avatar',
         'role',
+        'date_of_birth',
+        'gender',
+        'bio',
+        'company',
+        'website',
+        'timezone',
+        'locale',
+        'is_active',
+        'is_email_verified',
+        'last_login_at',
+        'last_login_ip',
+        'password_changed_at',
         'email_verified_at',
     ];
 
@@ -126,5 +140,37 @@ class User extends Authenticatable implements JWTSubject
                     ->where('type', 'billing')
                     ->where('is_default', true)
                     ->first();
+    }
+
+    /**
+     * Get the user's activity logs.
+     */
+    public function activityLogs()
+    {
+        return $this->hasMany(UserActivityLog::class);
+    }
+
+    /**
+     * Get the user's first name, fallback to splitting full name.
+     */
+    public function getFirstNameAttribute($value)
+    {
+        if ($value) return $value;
+        $parts = explode(' ', $this->name);
+        return $parts[0] ?? '';
+    }
+
+    /**
+     * Get the user's last name, fallback to splitting full name.
+     */
+    public function getLastNameAttribute($value)
+    {
+        if ($value) return $value;
+        $parts = explode(' ', $this->name);
+        if (count($parts) > 1) {
+            unset($parts[0]);
+            return implode(' ', $parts);
+        }
+        return '';
     }
 }

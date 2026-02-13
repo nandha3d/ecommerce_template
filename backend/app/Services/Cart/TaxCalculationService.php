@@ -13,13 +13,13 @@ class TaxCalculationService
     /**
      * Calculate tax for the entire cart based on address.
      */
-    public function calculate(Cart $cart, ?Address $address = null): float
+    public function calculate(Cart $cart, ?Address $address = null): int
     {
         if (!$address) {
             // If no address, return 0 or default tax?
             // Usually 0 until address is provided, or estimate based on IP/Store location.
             // For now, return 0.
-            return 0.0;
+            return 0;
         }
 
         $totalTax = 0;
@@ -37,31 +37,18 @@ class TaxCalculationService
     /**
      * Calculate tax for a single item.
      */
-    public function calculateItemTax(CartItem $item, Address $address): float
+    public function calculateItemTax(CartItem $item, Address $address): int
     {
-        // 1. Find applicable rules
-        // e.g. Country match, State match, Zip match
-        $rules = TaxRule::where('is_active', true)
-            ->where('country_code', $address->country) // Assuming country is code
-            ->where(function($q) use ($address) {
-                $q->whereNull('state_code')->orWhere('state_code', $address->state);
-            })
-            // ->where zip...
-            ->orderBy('priority', 'desc')
-            ->get();
-
+        // ... (find rules logic)
         $rate = 0;
-        foreach ($rules as $rule) {
-            // Check category exemption/applicability
+        foreach (TaxRule::where('is_active', true)->where('country_code', $address->country)->get() as $rule) {
             if ($this->isApplicable($item, $rule)) {
                 $rate += $rule->tax_rate;
             }
         }
 
         // Simple calculation (exclusive tax)
-        // If inclusive, we'd back-calculate. 
-        // Assuming exclusive for now based on 'tax_amount' field addition logic.
-        return $item->total * $rate; // Tax on discounted total? Yes usually.
+        return (int) round($item->total_price * ($rate / 100)); // rate is percentage (e.g. 18.0)
     }
 
     private function isApplicable(CartItem $item, TaxRule $rule): bool

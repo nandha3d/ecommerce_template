@@ -9,7 +9,7 @@ use App\Services\ConfigurationService;
 
 class ShiprocketService
 {
-    private $baseUrl = 'https://apiv2.shiprocket.in/v1/external';
+    private $baseUrl;
     private $email;
     private $password;
     private $configService;
@@ -17,6 +17,7 @@ class ShiprocketService
     public function __construct(ConfigurationService $configService)
     {
         $this->configService = $configService;
+        $this->baseUrl = config('services.shiprocket.base_url', 'https://apiv2.shiprocket.in/v1/external');
         $this->email = config('services.shiprocket.email');
         $this->password = config('services.shiprocket.password');
     }

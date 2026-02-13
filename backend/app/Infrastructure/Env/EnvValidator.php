@@ -40,6 +40,8 @@ final class EnvValidator
     private const PRODUCTION_REQUIRED_KEYS = [
         'RAZORPAY_KEY_ID' => 'Razorpay API Key ID',
         'RAZORPAY_KEY_SECRET' => 'Razorpay API Key Secret',
+        'DB_PASSWORD' => 'Production Database Password',
+        'MAIL_HOST' => 'Mail Server Host',
     ];
 
     /**

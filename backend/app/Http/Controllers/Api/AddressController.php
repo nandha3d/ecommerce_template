@@ -32,22 +32,11 @@ class AddressController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(\App\Http\Requests\AddressStoreRequest $request)
     {
         $this->authorize('create', Address::class);
 
-        $validated = $request->validate([
-            'type' => 'required|in:billing,shipping',
-            'name' => 'required|string|max:255',
-            'phone' => 'required|string|max:20',
-            'address_line_1' => 'required|string|max:255',
-            'address_line_2' => 'nullable|string|max:255',
-            'city' => 'required|string|max:100',
-            'state' => 'required|string|max:100',
-            'postal_code' => 'required|string|max:20',
-            'country' => 'required|string|max:100',
-            'is_default' => 'boolean'
-        ]);
+        $validated = $request->validated();
 
         // Enhanced Validation
         $validationResult = $this->validationService->validate($validated);
@@ -88,24 +77,13 @@ class AddressController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(\App\Http\Requests\AddressUpdateRequest $request, string $id)
     {
         $address = Address::findOrFail($id);
         
         $this->authorize('update', $address);
 
-        $validated = $request->validate([
-            'type' => 'in:billing,shipping',
-            'name' => 'string|max:255',
-            'phone' => 'string|max:20',
-            'address_line_1' => 'string|max:255',
-            'address_line_2' => 'nullable|string|max:255',
-            'city' => 'string|max:100',
-            'state' => 'string|max:100',
-            'postal_code' => 'string|max:20',
-            'country' => 'string|max:100',
-            'is_default' => 'boolean'
-        ]);
+        $validated = $request->validated();
 
         if (isset($validated['is_default']) && $validated['is_default']) {
             Auth::user()->addresses()

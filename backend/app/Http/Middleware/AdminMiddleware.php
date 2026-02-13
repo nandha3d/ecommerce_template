@@ -13,11 +13,13 @@ class AdminMiddleware
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if (!auth()->check()) {
+        $guard = auth('api');
+
+        if (!$guard->check()) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $user = auth()->user();
+        $user = $guard->user();
 
         if (!in_array($user->role, ['admin', 'super_admin'])) {
             \Log::warning('Unauthorized access attempt to admin route', [

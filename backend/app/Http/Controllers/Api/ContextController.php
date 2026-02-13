@@ -45,22 +45,40 @@ class ContextController extends Controller
              ];
         });
 
-        // 4. Return consolidated payload
+        // 4. Get Theme Settings (Public)
+        $themeSettings = \Core\System\Models\SiteSetting::where('key', 'like', 'theme.%')
+            ->where('is_public', true)
+            ->get()
+            ->mapWithKeys(fn($s) => [str_replace('theme.', '', $s->key) => $s->value]);
+
+        // Default Theme (Gold Rush) if not set
+        $theme = array_merge([
+            'preset_id' => 'gold-rush',
+            'primary' => '#d4af37',
+            'secondary' => '#1a1a1a',
+            'accent' => '#ffffff',
+            'bg' => '#fcfcfc',
+            'surface' => '#ffffff',
+            'border' => '#f3f4f6',
+            'text' => '#1a1a1a',
+            'muted' => '#9ca3af',
+        ], $themeSettings->toArray());
+
+        // 5. Return consolidated payload
         return response()->json([
             'currency' => [
                 'active_code' => $currency->code, // The resolved currency
                 'symbol' => $currency->symbol,
                 'position' => $currency->symbol_position,
                 'decimals' => $currency->decimal_places,
-                'exchange_rate' => $currency->exchange_rate, // Frontend MIGHT need this for instant updates, but dangerous math.
-                // We provide it for "approximate" JS updates, but final check is backend.
+                'exchange_rate' => $currency->exchange_rate, 
                 'available' => $currencies,
             ],
             'timezone' => [
                 'identifier' => $timezone->identifier,
                 'offset' => $timezone->offset,
-                // 'current_time' => now()->setTimezone($timezone->identifier)->toIso8601String(),
-            ]
+            ],
+            'theme' => $theme,
         ]);
     }
 }

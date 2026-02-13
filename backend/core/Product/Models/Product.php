@@ -24,6 +24,8 @@ use App\Models\ProductCustomization;
 class Product extends Model
 {
     use HasFactory;
+    
+    protected $appends = ['profit_margin'];
 
     protected $fillable = [
         'name',
@@ -73,11 +75,21 @@ class Product extends Model
         'is_returnable',
         'return_policy_days',
         'stock_threshold',
+        'video_link',
+        'og_title',
+        'og_description',
+        'og_image',
+        'twitter_title',
+        'twitter_description',
+        'twitter_image',
+        'include_in_sitemap',
+        'sitemap_priority',
+        'sitemap_change_frequency',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
-        'sale_price' => 'decimal:2',
+        'price' => 'integer',
+        'sale_price' => 'integer',
         'stock_quantity' => 'integer',
         'stock_threshold' => 'integer',
         'nutrition_facts' => 'array',
@@ -91,6 +103,9 @@ class Product extends Model
         'is_new' => 'boolean',
         'is_active' => 'boolean',
         // Dimensions
+        'price' => 'integer',
+        'sale_price' => 'integer',
+        'cost_price' => 'integer',
         'weight' => 'decimal:2',
         'length' => 'decimal:2',
         'breadth' => 'decimal:2',
@@ -108,6 +123,8 @@ class Product extends Model
         'has_customization' => 'boolean',
         'customization_fields' => 'array',
         'custom_tabs' => 'array',
+        'include_in_sitemap' => 'boolean',
+        'sitemap_priority' => 'decimal:1',
     ];
 
     /**
@@ -372,5 +389,10 @@ class Product extends Model
             'trace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3)
         ]);
         throw new \LogicException("Product is not sellable directly. Please use a specific ProductVariant.");
+    }
+
+    public function getProfitMarginAttribute()
+    {
+        return $this->variants->first()?->profit_margin ?? 0;
     }
 }

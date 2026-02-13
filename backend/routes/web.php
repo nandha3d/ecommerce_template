@@ -40,3 +40,6 @@ Route::redirect('/wishlist', env('FRONTEND_URL', 'http://localhost:5173') . '/wi
 
 // Admin Panel
 Route::get('/admin/{any?}', [MetaController::class, 'default'])->where('any', '.*');
+
+// SEO / Crawler Routes
+Route::get('/seo/product/{slug}', [App\Http\Controllers\SeoController::class, 'product']);

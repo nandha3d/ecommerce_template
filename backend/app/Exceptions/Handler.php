@@ -43,7 +43,9 @@ class Handler extends ExceptionHandler
     public function register(): void
     {
         $this->reportable(function (Throwable $e) {
-            // Log all exceptions with request context
+            if (app()->bound('sentry')) {
+                app('sentry')->captureException($e);
+            }
         });
 
         $this->renderable(function (Throwable $e, $request) {

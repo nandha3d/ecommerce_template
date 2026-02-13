@@ -15,6 +15,7 @@ class StoreProductRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
+            'slug' => 'required|string|unique:products,slug',
             'sku' => 'required|string|unique:products,sku',
             'description' => 'nullable|string',
             'short_description' => 'nullable|string|max:500',
@@ -55,6 +56,46 @@ class StoreProductRequest extends FormRequest
             'is_returnable' => 'boolean',
             'return_policy_days' => 'nullable|integer|min:0',
             'stock_threshold' => 'integer|min:0',
+            'video_link' => 'nullable|string|max:255',
+            'og_title' => 'nullable|string|max:255',
+            'og_description' => 'nullable|string|max:500',
+            'og_image' => 'nullable|string|max:255',
+            'twitter_title' => 'nullable|string|max:255',
+            'twitter_description' => 'nullable|string|max:500',
+            'twitter_image' => 'nullable|string|max:255',
+            'include_in_sitemap' => 'boolean',
+            'sitemap_priority' => 'nullable|numeric|min:0|max:1',
+            'sitemap_change_frequency' => 'nullable|string|in:always,hourly,daily,weekly,monthly,yearly,never',
         ];
+    }
+
+    /**
+     * Prepare data for validation
+     */
+    protected function prepareForValidation()
+    {
+        // Sanitize description HTML before validation
+        if ($this->has('description')) {
+            $this->merge([
+                'description' => strip_tags(
+                    $this->description,
+                    '<p><br><strong><em><u><h1><h2><h3><ul><ol><li><a><blockquote><code><pre><div><span><table><thead><tbody><tr><th><td>'
+                )
+            ]);
+        }
+
+        // Sanitize custom tabs content
+        if ($this->has('custom_tabs') && is_array($this->custom_tabs)) {
+            $tabs = $this->custom_tabs;
+            foreach ($tabs as &$tab) {
+                if (isset($tab['content'])) {
+                    $tab['content'] = strip_tags(
+                        $tab['content'],
+                        '<p><br><strong><em><u><h1><h2><h3><ul><ol><li><a><blockquote><code><pre><div><span><table><thead><tbody><tr><th><td>'
+                    );
+                }
+            }
+            $this->merge(['custom_tabs' => $tabs]);
+        }
     }
 }

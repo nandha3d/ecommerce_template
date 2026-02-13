@@ -1,29 +1,32 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import './index.css';
-import { store } from './store';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Provider } from 'react-redux';
-import { bootstrap } from './services/bootstrap';
-import App from './App';
-import ErrorBoundary from './components/common/ErrorBoundary';
-import { initializeConfig } from './utils/configValidator';
+import { store } from './store';
+import { ThemeProvider } from './context/ThemeContext';
+import { GlobalizationProvider } from './context/GlobalizationContext';
+import App from './App.tsx';
+import './index.css';
 
-// CRITICAL: Validate configuration BEFORE rendering React
-// App will NOT render if required config is missing
-const configValid = initializeConfig();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
-if (configValid) {
-  // Initialize App Data
-  bootstrap();
-
-  ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-      <Provider store={store}>
-        <ErrorBoundary>
-          <App />
-        </ErrorBoundary>
-      </Provider>
-    </React.StrictMode>,
-  )
-}
-
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <GlobalizationProvider>
+            <App />
+          </GlobalizationProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </Provider>
+  </React.StrictMode>,
+);

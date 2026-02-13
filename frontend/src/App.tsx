@@ -1,330 +1,94 @@
-import React, { useEffect } from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Provider } from 'react-redux';
-import { HelmetProvider } from 'react-helmet-async';
-import { store } from './store';
-import { useAppDispatch, useAppSelector } from './hooks/useRedux';
-import { checkAuth } from './store/slices/authSlice';
-import { fetchCart } from './store/slices/cartSlice';
-import StoreLayoutProvider from './storeLayout/StoreLayoutProvider';
-
-// Layouts
-import { MainLayout } from './components/layout';
-
-// Config Provider
-import { ConfigProvider } from './core/config/ConfigContext';
-import { GlobalizationProvider } from './context/GlobalizationContext';
-
-// Pages
-import { HomePage, ProductsPage, ProductDetailPage } from './features/products';
-import { CartPage } from './features/cart';
-import { CheckoutPage, OrderConfirmationPage } from './features/checkout';
-import { LoginPage, RegisterPage } from './features/auth';
-import { ProfilePage } from './features/user';
-import { OrderHistoryPage, OrderDetailsPage } from './features/orders';
-import { WishlistPage } from './features/wishlist';
-import AdminThemeProvider from './features/admin/theme/AdminThemeProvider';
-
-// Admin Pages (lazy loaded)
-const AdminDashboard = React.lazy(() => import('./features/admin/pages/DashboardPage'));
-const AdminProducts = React.lazy(() => import('./features/admin/pages/ProductsPage'));
-const AdminOrders = React.lazy(() => import('./features/admin/pages/OrdersPage'));
-const AdminLicense = React.lazy(() => import('./features/admin/pages/LicenseActivation'));
-const AdminProductEdit = React.lazy(() => import('./features/admin/pages/ProductEditPage'));
-const AdminCategories = React.lazy(() => import('./features/admin/pages/CategoriesPage'));
-const AdminAttributes = React.lazy(() => import('./features/admin/pages/AttributesPage'));
-const AdminCustomers = React.lazy(() => import('./features/admin/pages/CustomersPage'));
-const AdminAnalytics = React.lazy(() => import('./features/admin/pages/AnalyticsPage'));
-const AdminSettings = React.lazy(() => import('./features/admin/pages/SettingsPage'));
-
-// Loading fallback
-import { Loader } from './components/ui';
-
-// Route Guards
-interface ProtectedRouteProps {
-  children: React.ReactNode;
-  requireAuth?: boolean;
-  requireAdmin?: boolean;
-}
-
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requireAuth = false,
-  requireAdmin = false
-}) => {
-  const { isAuthenticated, isLoading, user } = useAppSelector((state) => state.auth);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader size="lg" text="Loading..." />
-      </div>
-    );
-  }
-
-  if (requireAuth && !isAuthenticated) {
-    return <Navigate to="/auth/login" replace />;
-  }
-
-  if (requireAdmin && user?.role !== 'admin') {
-    return <Navigate to="/" replace />;
-  }
-
-  return <>{children}</>;
-};
-
-// App Initializer Component
-const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const dispatch = useAppDispatch();
-  const { isLoading } = useAppSelector((state) => state.auth);
-
-  useEffect(() => {
-    dispatch(checkAuth());
-    dispatch(fetchCart());
-  }, [dispatch]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader size="lg" text="Initializing..." />
-      </div>
-    );
-  }
-
-  return <>{children}</>;
-};
-
 import { Toaster } from 'react-hot-toast';
 
-// ...
+// Layouts
+const AdminLayout = React.lazy(() => import('./features/admin/AdminLayout'));
+const StorefrontLayout = React.lazy(() => import('./features/storefront/StorefrontLayout'));
 
-// Main App Component
-const AppRoutes: React.FC = () => {
-  return (
-    <HelmetProvider>
-      <Toaster position="top-center" reverseOrder={false} />
-      <StoreLayoutProvider>
-        <BrowserRouter>
-          <ConfigProvider>
-            <GlobalizationProvider>
-              <AppInitializer>
-                <Routes>
-                  {/* Public Routes with Main Layout */}
-                  <Route element={<MainLayout />}>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/products" element={<ProductsPage />} />
-                    <Route path="/products/:slug" element={<ProductDetailPage />} />
-                    <Route path="/cart" element={<CartPage />} />
+// Admin Pages
+const Dashboard = React.lazy(() => import('./features/admin/pages/Dashboard'));
+const ProductList = React.lazy(() => import('./features/admin/pages/ProductList'));
+const ProductCreate = React.lazy(() => import('./features/admin/pages/ProductCreate'));
+const AttributeList = React.lazy(() => import('./features/admin/pages/AttributeList'));
+const OrderList = React.lazy(() => import('./features/admin/pages/OrderList'));
+const OrderDetail = React.lazy(() => import('./features/admin/pages/OrderDetail'));
+const RefundManagement = React.lazy(() => import('./features/admin/pages/RefundManagement'));
+const ReviewModeration = React.lazy(() => import('./features/admin/pages/ReviewModeration'));
+
+const CustomerList = React.lazy(() => import('./features/admin/pages/CustomerList'));
+const CustomerProfile = React.lazy(() => import('./features/admin/pages/CustomerProfile'));
+const UsersList = React.lazy(() => import('./features/admin/pages/UsersList'));
+const UserDetail = React.lazy(() => import('./features/admin/pages/UserDetail'));
+const UserCreate = React.lazy(() => import('./features/admin/pages/UserCreate'));
+const CouponManagement = React.lazy(() => import('./features/admin/pages/CouponManagement'));
+const Settings = React.lazy(() => import('./features/admin/pages/Settings'));
+const InventoryManagement = React.lazy(() => import('./features/admin/pages/InventoryManagement'));
+const AnalyticsPage = React.lazy(() => import('./features/admin/pages/AnalyticsPage'));
+const PricingPage = React.lazy(() => import('./features/admin/pages/PricingPage'));
+const GlobalizationPage = React.lazy(() => import('./features/admin/pages/GlobalizationPage'));
+const ModulesPage = React.lazy(() => import('./features/admin/pages/ModulesPage'));
+const SecurityPage = React.lazy(() => import('./features/admin/pages/SecurityPage'));
 
 
-                    {/* Protected Customer Routes */}
-                    <Route
-                      path="/account"
-                      element={
-                        <ProtectedRoute requireAuth>
-                          <ProfilePage />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/account/orders"
-                      element={
-                        <ProtectedRoute requireAuth>
-                          <OrderHistoryPage />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/account/wishlist"
-                      element={
-                        <ProtectedRoute requireAuth>
-                          <WishlistPage />
-                        </ProtectedRoute>
-                      }
-                    />
 
-                    <Route
-                      path="/checkout"
-                      element={
-                        <ProtectedRoute requireAuth>
-                          <CheckoutPage />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/checkout/success"
-                      element={
-                        <ProtectedRoute requireAuth>
-                          <OrderConfirmationPage />
-                        </ProtectedRoute>
-                      }
-                    />
-                    <Route
-                      path="/account/orders/:id"
-                      element={
-                        <ProtectedRoute requireAuth>
-                          <OrderDetailsPage />
-                        </ProtectedRoute>
-                      }
-                    />
 
-                    {/* Static Pages */}
-                    <Route path="/pages/:slug" element={<div className="container mx-auto py-16">Static Page Content</div>} />
-                  </Route>
 
-                  {/* Auth Routes */}
-                  <Route path="/auth/login" element={<LoginPage />} />
-                  <Route path="/auth/register" element={<RegisterPage />} />
+const Login = React.lazy(() => import('./features/admin/pages/Login'));
 
-                  {/* Admin Routes */}
-                  <Route
-                    path="/admin/*"
-                    element={
-                      <AdminThemeProvider>
-                        <Routes>
-                          <Route
-                            path="/" // Corresponds to /admin
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading admin..." />}>
-                                  <AdminDashboard />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="products"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminProducts />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="products/new"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminProductEdit />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="products/:id/edit"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminProductEdit />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="orders"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminOrders />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="license"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminLicense />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="categories"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminCategories />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="attributes"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminAttributes />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="customers"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminCustomers />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="analytics"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminAnalytics />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="settings"
-                            element={
-                              <ProtectedRoute requireAuth requireAdmin>
-                                <React.Suspense fallback={<Loader fullScreen text="Loading..." />}>
-                                  <AdminSettings />
-                                </React.Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                        </Routes>
-                      </AdminThemeProvider>
-                    }
-                  />
-
-                  {/* 404 */}
-                  <Route
-                    path="*"
-                    element={
-                      <div className="min-h-screen flex items-center justify-center">
-                        <div className="text-center">
-                          <h1 className="text-6xl font-bold text-primary-900 mb-4">404</h1>
-                          <p className="text-neutral-600 mb-8">Page not found</p>
-                          <a href="/" className="btn-primary">Go Home</a>
-                        </div>
-                      </div>
-                    }
-                  />
-                </Routes>
-              </AppInitializer>
-            </GlobalizationProvider>
-          </ConfigProvider>
-        </BrowserRouter>
-      </StoreLayoutProvider>
-    </HelmetProvider>
-  );
-};
+// Storefront Pages
+const Home = React.lazy(() => import('./features/storefront/pages/Home'));
+const ProductCatalog = React.lazy(() => import('./features/storefront/pages/ProductCatalog'));
+const ProductDetail = React.lazy(() => import('./features/storefront/pages/ProductDetail'));
 
 const App: React.FC = () => {
   return (
-    <AppRoutes />
+    <BrowserRouter>
+      <Suspense fallback={<div className="flex-center" style={{ height: '100vh', backgroundColor: 'var(--bg-main)' }}>Loading...</div>}>
+        <Routes>
+          <Route path="/admin/login" element={<Login />} />
+
+          {/* Admin Routes */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="products" element={<ProductList />} />
+            <Route path="products/create" element={<ProductCreate />} />
+            <Route path="products/:id/edit" element={<ProductCreate />} />
+            <Route path="attributes" element={<AttributeList />} />
+            <Route path="orders" element={<OrderList />} />
+            <Route path="orders/:id" element={<OrderDetail />} />
+            <Route path="refunds" element={<RefundManagement />} />
+            <Route path="reviews" element={<ReviewModeration />} />
+            <Route path="customers" element={<CustomerList />} />
+            <Route path="customers/:id" element={<CustomerProfile />} />
+            <Route path="users" element={<UsersList />} />
+            <Route path="users/create" element={<UserCreate />} />
+            <Route path="users/:id" element={<UserDetail />} />
+            <Route path="marketing" element={<CouponManagement />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+            <Route path="pricing" element={<PricingPage />} />
+            <Route path="globalization" element={<GlobalizationPage />} />
+            <Route path="modules" element={<ModulesPage />} />
+            <Route path="security" element={<SecurityPage />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="inventory" element={<InventoryManagement />} />
+          </Route>
+
+          {/* Storefront Routes */}
+          <Route path="/" element={<StorefrontLayout />}>
+            <Route index element={<Home />} />
+            <Route path="products" element={<ProductCatalog />} />
+            <Route path="products/:slug" element={<ProductDetail />} />
+          </Route>
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+      <Toaster position="top-right" />
+    </BrowserRouter>
   );
 };
 
 export default App;
-

@@ -10,6 +10,7 @@ enum OrderState: string
     case FAILED = 'failed';
     case CANCELLED = 'cancelled';
     case FULFILLED = 'fulfilled';
+    case FRAUD_DETECTED = 'fraud_detected';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum OrderState: string
             self::FAILED => 'Failed',
             self::CANCELLED => 'Cancelled',
             self::FULFILLED => 'Fulfilled',
+            self::FRAUD_DETECTED => 'Fraud Detected',
         };
     }
 
@@ -32,6 +34,7 @@ enum OrderState: string
             self::FAILED => 'red',
             self::CANCELLED => 'red',
             self::FULFILLED => 'blue',
+            self::FRAUD_DETECTED => 'red',
         };
     }
 }

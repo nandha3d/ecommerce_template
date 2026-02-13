@@ -1,97 +1,96 @@
-import React, { forwardRef, SelectHTMLAttributes } from 'react';
-import { ChevronDown } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ChevronDown, X } from 'lucide-react';
 
-interface SelectOption {
-    value: string | number;
+interface Option {
+    value: string;
     label: string;
-    disabled?: boolean;
 }
 
-interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> {
-    label?: string;
-    error?: string;
-    options: SelectOption[];
+interface SelectProps {
+    options: Option[];
+    value: string;
+    onChange: (value: string) => void;
     placeholder?: string;
-    selectSize?: 'sm' | 'md' | 'lg';
+    label?: string;
+    className?: string;
+    style?: React.CSSProperties;
+    clearable?: boolean;
 }
 
-const Select = forwardRef<HTMLSelectElement, SelectProps>(
-    (
-        {
-            label,
-            error,
-            options,
-            placeholder,
-            selectSize = 'md',
-            className = '',
-            id,
-            ...props
-        },
-        ref
-    ) => {
-        const selectId = id || `select-${Math.random().toString(36).substr(2, 9)}`;
+export const Select: React.FC<SelectProps> = ({
+    options,
+    value,
+    onChange,
+    placeholder = 'Select option',
+    label,
+    className = '',
+    style,
+    clearable = false
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-        const sizeStyles = {
-            sm: 'px-3 py-2 text-sm',
-            md: 'px-4 py-3 text-base',
-            lg: 'px-5 py-4 text-lg',
+    const selectedOption = options.find(opt => opt.value === value);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
         };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
-        return (
-            <div className="w-full">
-                {label && (
-                    <label
-                        htmlFor={selectId}
-                        className="block text-sm font-medium text-neutral-700 mb-2"
-                    >
-                        {label}
-                    </label>
-                )}
-                <div className="relative">
-                    <select
-                        ref={ref}
-                        id={selectId}
-                        className={`
-              w-full rounded-lg border bg-white appearance-none
-              text-neutral-900
-              focus:outline-none focus:ring-2 focus:border-transparent
-              transition-all duration-200
-              ${sizeStyles[selectSize]}
-              ${error
-                                ? 'border-danger focus:ring-danger'
-                                : 'border-neutral-300 focus:ring-primary-500'
-                            }
-              ${className}
-            `}
-                        {...props}
-                    >
-                        {placeholder && (
-                            <option value="" disabled>
-                                {placeholder}
-                            </option>
-                        )}
-                        {options.map((option) => (
-                            <option
-                                key={option.value}
-                                value={option.value}
-                                disabled={option.disabled}
-                            >
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                        <ChevronDown className="w-5 h-5 text-neutral-400" />
-                    </div>
+    return (
+        <div className={`custom-select-container ${className}`} ref={containerRef} style={style}>
+            {label && <label className="label">{label}</label>}
+            <div
+                className={`custom-select-trigger ${isOpen ? 'open' : ''}`}
+            >
+                <span onClick={() => setIsOpen(!isOpen)} style={{ flex: 1 }}>
+                    {selectedOption ? selectedOption.label : placeholder}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {clearable && value && (
+                        <X
+                            size={14}
+                            className="select-clear-icon"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('');
+                                setIsOpen(false);
+                            }}
+                            style={{ cursor: 'pointer', opacity: 0.6 }}
+                        />
+                    )}
+                    <ChevronDown
+                        size={18}
+                        className={`chevron ${isOpen ? 'rotated' : ''}`}
+                        onClick={() => setIsOpen(!isOpen)}
+                    />
                 </div>
-                {error && (
-                    <p className="mt-1 text-sm text-danger">{error}</p>
-                )}
             </div>
-        );
-    }
-);
 
-Select.displayName = 'Select';
-
-export default Select;
+            {isOpen && (
+                <div className="custom-select-options">
+                    {options.map(option => (
+                        <div
+                            key={option.value}
+                            className={`custom-select-option ${option.value === value ? 'selected' : ''}`}
+                            onClick={() => {
+                                onChange(option.value);
+                                setIsOpen(false);
+                            }}
+                        >
+                            {option.label}
+                        </div>
+                    ))}
+                    {options.length === 0 && (
+                        <div className="custom-select-option-empty">No options available</div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};

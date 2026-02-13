@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 class Order extends Model
@@ -34,11 +35,11 @@ class Order extends Model
 
     protected $casts = [
         'status' => \App\Enums\OrderState::class,
-        'subtotal' => 'decimal:2',
-        'discount' => 'decimal:2',
-        'shipping' => 'decimal:2',
-        'tax' => 'decimal:2',
-        'total' => 'decimal:2',
+        'subtotal' => 'integer',
+        'discount' => 'integer',
+        'shipping' => 'integer',
+        'tax' => 'integer',
+        'total' => 'integer',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
     ];
@@ -86,6 +87,14 @@ class Order extends Model
     public function coupon(): BelongsTo
     {
         return $this->belongsTo(Coupon::class);
+    }
+
+    /**
+     * Get the price snapshot.
+     */
+    public function priceSnapshot(): HasOne
+    {
+        return $this->hasOne(PriceSnapshot::class);
     }
 
     /**

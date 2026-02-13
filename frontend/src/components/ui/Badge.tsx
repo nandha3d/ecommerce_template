@@ -2,42 +2,41 @@ import React from 'react';
 
 interface BadgeProps {
     children: React.ReactNode;
-    variant?: 'default' | 'success' | 'warning' | 'danger' | 'info';
-    size?: 'sm' | 'md';
+    variant?: 'success' | 'warning' | 'error' | 'info' | 'default';
     className?: string;
 }
 
-const Badge: React.FC<BadgeProps> = ({
+export const Badge: React.FC<BadgeProps> = ({
     children,
     variant = 'default',
-    size = 'md',
-    className = '',
+    className = ''
 }) => {
-    const variantStyles = {
-        default: 'bg-neutral-100 text-neutral-800',
-        success: 'bg-green-100 text-green-800',
-        warning: 'bg-yellow-100 text-yellow-800',
-        danger: 'bg-red-100 text-red-800',
-        info: 'bg-blue-100 text-blue-800',
+    const variants = {
+        success: { bg: 'rgba(34, 197, 94, 0.1)', color: 'rgb(21, 128, 61)' },
+        warning: { bg: 'rgba(234, 179, 8, 0.1)', color: 'rgb(161, 98, 7)' },
+        error: { bg: 'rgba(239, 68, 68, 0.1)', color: 'rgb(185, 28, 28)' },
+        info: { bg: 'rgba(59, 130, 246, 0.1)', color: 'rgb(29, 78, 216)' },
+        default: { bg: 'var(--bg-main)', color: 'var(--text-secondary)' }
     };
 
-    const sizeStyles = {
-        sm: 'px-2 py-0.5 text-xs',
-        md: 'px-3 py-1 text-xs',
-    };
+    const { bg, color } = variants[variant] || variants.default;
 
     return (
         <span
-            className={`
-        inline-flex items-center rounded-full font-semibold
-        ${variantStyles[variant]}
-        ${sizeStyles[size]}
-        ${className}
-      `}
+            className={`badge ${className}`}
+            style={{
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-full)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                backgroundColor: bg,
+                color: color,
+                display: 'inline-flex',
+                alignItems: 'center',
+                whiteSpace: 'nowrap'
+            }}
         >
             {children}
         </span>
     );
 };
-
-export default Badge;
