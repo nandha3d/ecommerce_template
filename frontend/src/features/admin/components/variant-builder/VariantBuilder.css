@@ -1,0 +1,381 @@
+.variant-builder {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    color: var(--text-main);
+}
+
+.variant-builder-header {
+    margin-top: var(--space-xl);
+    margin-bottom: var(--space-sm);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    /* Inline alignment */
+    position: relative;
+}
+
+.variant-builder-header .header-info {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-md);
+}
+
+.variant-builder-header .header-info h2 {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+.variant-builder-header .header-info span {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.variant-builder-header::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 0;
+    width: 80px;
+    height: 3px;
+    background: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+.bulk-actions-bar {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 var(--space-xl);
+    margin: 0 var(--space-lg);
+    background: var(--bg-surface);
+}
+
+.bulk-actions-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.bulk-actions-right .input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--bg-main);
+    padding: 2px 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+}
+
+.bulk-actions-right .input-wrapper input {
+    width: 70px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    font-size: 11px;
+    color: var(--text-main);
+}
+
+/* Header & Matrix overrides for Dark Mode */
+.matrix-creator {
+    background: var(--bg-surface);
+    padding: var(--space-lg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    margin-bottom: var(--space-lg);
+}
+
+.matrix-attr-card {
+    background: var(--bg-main);
+    border: 1px solid var(--border-strong);
+    padding: var(--space-sm);
+    border-radius: var(--radius-md);
+}
+
+/* Variant Card - 2 Line Design */
+.variant-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--primary);
+    /* Theme colored border */
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--space-sm);
+    overflow: visible;
+    /* Prevent dropdown clipping */
+    transition: var(--transition);
+    position: relative;
+    z-index: 10;
+}
+
+.variant-card.selected {
+    box-shadow: 0 0 0 3px var(--primary-light), 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.variant-card.inactive {
+    opacity: 0.6;
+    border-color: var(--border);
+}
+
+/* Header - ID, Title, Status, Actions */
+.variant-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-sm) var(--space-lg);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-surface);
+    border-top-left-radius: var(--radius-lg);
+    border-top-right-radius: var(--radius-lg);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.variant-id-badge {
+    background: var(--primary);
+    color: var(--text-on-primary);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.variant-title-group h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-main);
+}
+
+.variant-sku-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+    /* Increased visibility */
+    font-family: monospace;
+    opacity: 0.8;
+}
+
+.variant-card input[type="checkbox"] {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Body - Condensed into exactly 2 rows */
+.variant-card-body {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    border-bottom-left-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
+    overflow: visible;
+}
+
+/* ROW 1: Attributes | SKU | Pricing */
+.row-line-1 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    padding: var(--space-sm) var(--space-lg);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    min-height: 48px;
+}
+
+/* ROW 2: Stock | Net Wt | Shipping | Images - INCREASED HEIGHT */
+.row-line-2 {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    padding: var(--space-md) var(--space-lg);
+    /* Increased vertical padding */
+    background: var(--bg-main);
+    min-height: 65px;
+    /* Added 15px+ taller */
+    border-bottom-left-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
+}
+
+.section-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
+.attributes-group {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    flex: 1;
+}
+
+/* Shared Compact Controls */
+.vb-select-custom {
+    width: auto !important;
+    min-width: 100px;
+    position: relative;
+}
+
+.vb-select-custom .custom-select-trigger {
+    height: 32px !important;
+    padding: 0 10px !important;
+    font-size: 12px !important;
+    width: 100% !important;
+    white-space: nowrap !important;
+}
+
+/* Fix dropdown width and overlap */
+.vb-select-custom .custom-select-options {
+    width: max-content !important;
+    min-width: 100% !important;
+    white-space: nowrap !important;
+    z-index: 1000 !important;
+}
+
+.vb-select-custom .custom-select-option {
+    white-space: nowrap !important;
+}
+
+.vb-input-compact {
+    height: 32px !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+    min-width: 90px;
+    background-color: var(--bg-main) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text-main) !important;
+}
+
+.vb-input-price {
+    width: 90px !important;
+    height: 32px !important;
+    font-weight: 600;
+    accent-color: var(--primary);
+    /* Theme colored spinner */
+}
+
+.vb-input-shipping {
+    width: 65px !important;
+    height: 32px !important;
+    font-size: 12px !important;
+    accent-color: var(--primary);
+    /* Theme colored spinner */
+}
+
+/* Custom spinners - ROBUST HIDE + CUSTOM ARROWS */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    margin: 0 !important;
+    display: none !important;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield !important;
+    appearance: textfield !important;
+    background-color: var(--bg-main) !important;
+    border: 1px solid var(--border) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+    background-size: 14px;
+    padding-right: 20px !important;
+}
+
+input[type="number"]:focus {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='var(--primary)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m7 15 5 5 5-5'/%3E%3Cpath d='m7 9 5-5 5 5'/%3E%3C/svg%3E");
+}
+
+.vb-label-compact {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    text-transform: uppercase;
+}
+
+.vb-field-group-horizontal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Images Row Integrated into Row 2 - LARGER SLOTS */
+.images-inline-group {
+    display: flex;
+    gap: 6px;
+    padding-left: var(--space-md);
+    border-left: 1px solid var(--border-strong);
+}
+
+.image-slot-mini {
+    width: 42px;
+    /* Increased size */
+    height: 42px;
+    /* Increased size */
+    border: 1px dashed var(--border-strong);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    background: var(--bg-surface);
+    transition: var(--transition);
+}
+
+.image-slot-mini:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.image-slot-mini img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 3px;
+}
+
+/* Status Badge - reusing ACT UI */
+.status-badge-compact {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid var(--success);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.status-badge-compact.inactive {
+    background: var(--error-bg);
+    color: var(--error);
+    border-color: var(--error);
+}
+
+/* Modal and Matrix adjustments */
+.modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+}
